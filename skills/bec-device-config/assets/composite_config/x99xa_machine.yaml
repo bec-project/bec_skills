@@ -1,0 +1,16 @@
+###################################
+##        SLS machine            ##
+###################################
+
+curr:
+  deviceClass: ophyd.EpicsSignalRO
+  deviceConfig:
+    read_pv: ARIDI-PCT:CURRENT
+    auto_monitor: true
+  readoutPriority: baseline
+  description: SLS ring current
+  deviceTags: [machine]
+  onFailure: buffer          # never abort a scan because the machine PV hiccups
+  readOnly: true
+  enabled: true
+  softwareTrigger: false

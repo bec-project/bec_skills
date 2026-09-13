@@ -1,0 +1,144 @@
+---
+name: bec-new-scan
+description: Write a new BEC scan (step, fly, continuous, time or custom acquisition procedure) using only the v4 ScanBase template - all ten scan hooks, ScanActions/ScanComponents instead of generator stubs, typed ScanArgument parameters, plugin export and v4 tests. Use whenever the user wants to add, implement, port or scaffold a scan for BEC or a beamline plugin repo (debye_bec, csaxs_bec, ...), migrate a legacy generator scan (yield from self.stubs) to v4, or asks how scan_core / prepare_scan / at_each_point should be implemented.
+metadata:
+  author: bec-project
+  version: "0.1"
+---
+
+# New BEC scan (v4)
+
+A v4 scan is a plain Python class deriving from `bec_server.scan_server.scans.scan_base.ScanBase`.
+The scan server calls ten hook methods in a fixed order and the scan drives devices *directly*
+through `self.actions` (`ScanActions`) and reusable building blocks in `self.components`
+(`ScanComponents`). There are no generators, no `yield from self.stubs...`, no
+`SyncFlyScanBase`/`AsyncFlyScanBase` - those belong to the legacy API in `legacy_scans.py` and must
+not be mixed into a new scan. If the user hands you a legacy scan, port it (mapping table in
+[references/hooks-and-actions.md](references/hooks-and-actions.md)).
+
+Authoritative in-repo sources when in doubt (the public docs have no scan-authoring page yet):
+`bec_server/scan_server/scans/line_scan.py` (step scan), `cont_line_scan.py` (software-managed
+continuous), a plugin `HARDWARE_TRIGGERED` scan such as `debye_bec/scans/nidaq_continuous_scan.py`,
+and the Jinja template `bec_lib/utils/plugin_manager/create/templates/v4_scan.py.jinja`.
+
+## 1. Decide the shape before writing code
+
+Ask yourself (or the user, if the answer changes the design) three things:
+
+- **Where does it live?** A beamline-specific scan goes into the plugin repo under
+  `<plugin>/<plugin>/scans/<scan_name>.py` and must be exported from `scans/__init__.py`
+  (`bec.scans` entry point). Only generic scans go into `bec_server/scan_server/scans/`.
+- **Who triggers?** `ScanType.SOFTWARE_TRIGGERED` when the scan itself moves, triggers and reads
+  at every point (`at_each_point` inside `scan_core`). `ScanType.HARDWARE_TRIGGERED` when a device
+  runs the acquisition after `kickoff` and the scan only waits for `complete` while reading
+  monitored devices. Devices read `scan_info.scan_type` to decide whether to expect a software
+  trigger per point, so this must be honest.
+- **What are the inputs?** Fixed parameters become typed `__init__` arguments. Only scans that
+  accept a variable number of `(device, start, stop)` bundles use `arg_input` + `arg_bundle_size`
+  (see [references/arguments.md](references/arguments.md)).
+
+## 2. Scaffold
+
+In a plugin repo prefer the official generator, which renders the v4 template, appends the export
+to `scans/__init__.py`, wires the plugin's `ScanComponents` subclass if one exists, and formats:
+
+```bash
+bec-plugin-manager create scan <scan_name>
+```
+
+It is interactive (name, description, scan type, built-in args, custom args). If it cannot run
+(no TTY, not in a plugin repo, core repo), copy [assets/v4_scan_template.py](assets/v4_scan_template.py)
+and adapt it; it is the rendered template with a complete software-triggered step scan and a
+hardware-triggered variant in [assets/hardware_triggered_example.py](assets/hardware_triggered_example.py).
+
+## 3. Implement all ten hooks
+
+The server runs `prepare_scan, open_scan, stage, pre_scan, scan_core, post_scan, unstage,
+close_scan` in this order and calls `on_exception(exc)` if anything raises; `at_each_point` is
+yours to call from `scan_core`. Every hook is `@abstractmethod` on `ScanBase`, so all ten must
+exist, each decorated with `@scan_hook` (this is what lets a beamline `ScanModifier` plugin run
+code before/after/instead of your hook). Responsibilities:
+
+| hook | must do | typical body |
+|---|---|---|
+| `__init__` | `super().__init__(**kwargs)`, store args, `self.update_scan_info(...)` with exp_time/relative/..., set `scan_report_devices`, elevate step-scanned motors: `self.actions.set_device_readout_priority(self.motors, priority="monitored")` | no device I/O here - RPC calls are blocked during construction |
+| `prepare_scan` | compute `self.positions` (`position_generators.*`), apply `relative` via `self.components.get_start_positions`, `self.components.check_limits`, `update_scan_info(positions=, num_points=, num_monitored_readouts=)`, `add_scan_report_instruction_scan_progress`, start pre-move and baseline read with `wait=False` and keep the statuses | everything that can fail should fail here, before the scan opens |
+| `open_scan` | `self.actions.open_scan()` | mandatory, nothing else |
+| `stage` | `self.actions.stage_all_devices()` | device-side logic belongs in the device |
+| `pre_scan` | `self._premove_motor_status.wait()`, `self.actions.pre_scan_all_devices()` | last chance before time-critical devices start |
+| `scan_core` | step: `self.components.step_scan(self.motors, self.positions, at_each_point=self.at_each_point, last_positions=self.positions[0])`; hardware: `kickoff(wait=False).wait(timeout=..)`, then loop `while not complete_status.done: self.at_each_point()` | never `time.sleep` for the whole duration - poll `.done` so abort works |
+| `at_each_point` | step: `self.components.step_scan_at_each_point(motors, positions, last_positions=...)`; hardware: `self.actions.read_monitored_devices()` | keep it a hook so modifiers can extend it |
+| `post_scan` | `status = self.actions.complete_all_devices(wait=False)`, move back if `relative`, `status.wait()` | |
+| `unstage` | `self.actions.unstage_all_devices()` | |
+| `close_scan` | wait for the baseline status, `self.actions.close_scan()`, `self.actions.check_for_unchecked_statuses()` | the last call turns forgotten statuses into a WARNING alarm instead of silent data loss |
+| `on_exception` | return motors to start, stop kicked-off devices, release locks | must not raise |
+
+Rules that follow from how the server works:
+
+- **Every `ScanStubStatus` must be resolved** with `.wait()` or by checking `.done`. Statuses from
+  `wait=False` calls are the only way to overlap work (pre-move during baseline read, complete
+  during move-back); never drop them.
+- **`self.actions.*` guarded by `@requires_scan_is_running` raise outside a running scan.** Setup
+  belongs in `prepare_scan`, not `__init__`; construction-time RPC is blocked by the assembler.
+- **Positions are `np.ndarray` of shape `(num_points, len(motors))`**, even for one motor
+  (`[:, np.newaxis]`). `num_monitored_readouts` = points x `burst_at_each_point`.
+- **Abort-friendliness:** long loops poll statuses or sleep in short slices; the worker checks
+  `_shutdown_event` between hooks only.
+- `scan_name` must be a valid identifier and unique across core + plugin scans (duplicates are
+  skipped with an alarm). Keep the module docstring listing the hook order - the template does.
+
+## 4. Arguments, GUI and docs
+
+Type every argument with `Annotated[T, ScanArgument(display_name=..., gt/ge/lt/le=..., units=...,
+reference_units="device")]` or the shared aliases `DefaultArgType.Relative`, `.ExposureTime`,
+`.FramesPerTrigger`, `.SettlingTime`, `.SettlingTimeAfterTrigger`, `.ReadoutTime`,
+`.BurstAtEachPoint`, `.Snaked`, `.OptimizeTrajectory`. Required arguments are keyword-only
+without a default (`*, relative: DefaultArgType.Relative`). `ScanInputValidator` enforces these
+on client and server, and the ScanControl widget builds its form from them, so `gui_config`
+groups (`{"Movement Parameters": [...], "Acquisition Parameters": [...]}`) should list every
+public argument. Write the `__init__` docstring in Google style with an `Examples:` block - it
+becomes `scans.<name>.__doc__` in the IPython client. Details and the `*args` bundle mechanism:
+[references/arguments.md](references/arguments.md).
+
+## 5. Tests
+
+Use the shared v4 fixtures and hook assertions from `bec_server` (a `dev` extra of every plugin
+repo), never hand-rolled device mocks:
+
+```python
+from bec_server.scan_server.tests.scan_fixtures import nth_done_status_mock, readout_priority, v4_scan_assembler
+from bec_server.scan_server.tests.scan_hook_tests import DEFAULT_HOOK_TESTS, PREMOVE_HOOK_TESTS, STANDARD_STEP_SCAN_TESTS, run_scan_tests
+```
+
+`v4_scan_assembler("<scan_name>", *args, **kwargs)` builds the scan through the real
+`ScanAssembler` with mocked devices (limits -10..10) and marks the scan as running so
+`self.actions` calls work. Cover: (a) the default hook contracts via
+`run_scan_tests(scan, [...])` - pick `DEFAULT_HOOK_TESTS` for every scan, `PREMOVE_HOOK_TESTS`
+when you pre-move, `STANDARD_STEP_SCAN_TESTS` for step scans; (b) `prepare_scan` positions,
+`num_points`, `scan_report_instructions`, limit errors; (c) `scan_core` for hardware-triggered
+scans with `scan.actions.kickoff/complete` mocked and `nth_done_status_mock(resolve_after=N)`;
+(d) `on_exception` restores state. Template: [assets/test_template.py](assets/test_template.py).
+Run with `python -m pytest --random-order -q tests/tests_scans/test_<scan_name>.py`.
+
+## 6. Wire it up and verify live
+
+1. Export: `from .<scan_name> import <ScanName>` in `scans/__init__.py` (the entry point
+   `bec.scans` must point at that package in `pyproject.toml`).
+2. Reload a running scan server without restart: from the client
+   `bec.connector.send(MessageEndpoints.service_request(), messages.ServiceRequestMessage(action="reload_scans"))`,
+   or restart `bec-scan-server`. The scan then appears as `scans.<scan_name>` with signature and
+   docstring; check `scans.<scan_name>?` in the IPython client.
+3. If simulated devices are available, run it once end to end and inspect `bec.queue` / the scan
+   report; a scan that opens but never closes usually means an unresolved status.
+4. Format: `black --line-length=100 --skip-magic-trailing-comma` and `isort --profile=black`.
+
+## Deliverable checklist
+
+- [ ] `ScanBase` from `scans.scan_base`, `scan_type` honest, `scan_name` unique identifier
+- [ ] ten `@scan_hook` methods, `open_scan`/`close_scan` call the actions of the same name,
+      `check_for_unchecked_statuses()` last
+- [ ] no `yield`, no `self.stubs`, no legacy attributes (`required_kwargs`, `pre_move`,
+      `return_to_start_after_abort`, `scan_report_hint`, `ScanArgType`)
+- [ ] every `wait=False` status awaited; motors elevated to `monitored` if step-scanned
+- [ ] typed arguments + `gui_config` + docstring with example
+- [ ] exported in `scans/__init__.py`; tests with `v4_scan_assembler` pass in random order

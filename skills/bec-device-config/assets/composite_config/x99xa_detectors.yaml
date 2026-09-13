@@ -1,0 +1,16 @@
+###################################
+##            Eiger              ##
+###################################
+
+eiger:
+  deviceClass: x99xa_bec.devices.eiger.Eiger9M
+  deviceConfig:
+    prefix: "X99XA-ES-EIGER9M:"
+    device_access: true
+  readoutPriority: async
+  softwareTrigger: true
+  description: Eiger 9M area detector
+  deviceTags: [detectors]
+  onFailure: raise
+  connectionTimeout: 15
+  enabled: true

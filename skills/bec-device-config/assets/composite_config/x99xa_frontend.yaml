@@ -1,0 +1,29 @@
+###################################
+##       Frontend absorber       ##
+###################################
+
+abs:
+  deviceClass: x99xa_bec.devices.absorber.Absorber
+  deviceConfig:
+    prefix: "X99XA-FE-ABS1:"
+  readoutPriority: baseline
+  description: Frontend absorber
+  deviceTags: [frontend]
+  onFailure: retry
+  enabled: true
+  softwareTrigger: false
+
+###################################
+##        Frontend slits         ##
+###################################
+
+sldi_trxr:
+  deviceClass: ophyd_devices.EpicsMotorEC
+  deviceConfig:
+    prefix: X99XA-FE-SLDI:TRXR
+  readoutPriority: baseline
+  description: Front-end slit X translation, ring side
+  deviceTags: [frontend, slits]
+  onFailure: retry
+  enabled: true
+  softwareTrigger: false

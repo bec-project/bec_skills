@@ -1,0 +1,32 @@
+# Effective session config for X99XA. Load with:
+#   bec.config.update_session_with_file("device_configs/x99xa_standard_config.yaml")
+# Validate with:
+#   ophyd_test --config device_configs/x99xa_standard_config.yaml
+# Every included file is a flat device mapping; the wrapper keys below are dropped on load.
+
+machine:
+  - !include ./x99xa_machine.yaml
+
+frontend:
+  - !include ./x99xa_frontend.yaml
+
+optics:
+  - !include ./x99xa_optics.yaml
+
+experimental_hutch:
+  - !include ./x99xa_experimental_hutch.yaml
+
+detectors:
+  - !include ./x99xa_detectors.yaml
+
+# Optional subsystems - uncomment to enable
+# xrd:
+#   - !include ./x99xa_xrd.yaml
+
+## Beamline-specific one-offs (kept inline because they belong to no subsystem file)
+bec_status:
+  deviceClass: ophyd_devices.SimMonitor
+  readoutPriority: on_request
+  enabled: true
+  description: Dummy device used by GUI smoke tests
+  deviceTags: [misc]

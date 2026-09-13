@@ -1,0 +1,41 @@
+###################################
+##         Sample stage          ##
+###################################
+
+samx:
+  deviceClass: ophyd_devices.EpicsMotor
+  deviceConfig:
+    prefix: "X99XA-ES1-MOT:SAMX"
+    limits: [-50, 50]
+  readoutPriority: baseline
+  description: Sample X
+  deviceTags: [experimental_hutch, sample_stage]
+  onFailure: retry
+  enabled: true
+
+samy:
+  deviceClass: ophyd_devices.EpicsMotor
+  deviceConfig:
+    prefix: "X99XA-ES1-MOT:SAMY"
+    limits: [-20, 20]
+  readoutPriority: baseline
+  description: Sample Y
+  deviceTags: [experimental_hutch, sample_stage]
+  onFailure: retry
+  enabled: true
+
+###################################
+##       Beam diagnostics        ##
+###################################
+
+bpm4i:
+  deviceClass: ophyd.EpicsSignalRO
+  deviceConfig:
+    read_pv: X99XA-ES1-BPM4:INTENSITY
+    auto_monitor: true
+  readoutPriority: monitored
+  description: BPM4 intensity
+  deviceTags: [experimental_hutch, diagnostics]
+  onFailure: buffer
+  readOnly: true
+  enabled: true

@@ -1,0 +1,12 @@
+{
+  "name": "bec-skills",
+  "description": "Agent skills for BEC (Beamline Experiment Control): reviewing changes, creating widgets and plots, writing scans, device configs and ophyd device integrations.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jan Wyzula",
+    "email": "jan.wyzula@psi.ch"
+  },
+  "repository": "https://github.com/bec-project/bec_skills",
+  "license": "BSD-3-Clause",
+  "keywords": ["bec", "beamline", "psi", "ophyd", "pyside6", "code-review"]
+}

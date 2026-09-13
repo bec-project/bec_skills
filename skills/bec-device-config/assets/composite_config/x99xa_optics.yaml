@@ -1,0 +1,24 @@
+###################################
+##        Monochromator          ##
+###################################
+
+mo1_bragg:
+  deviceClass: x99xa_bec.devices.mo1_bragg.Mo1Bragg
+  deviceConfig:
+    prefix: "X99XA-OP-MO1:BRAGG:"
+  readoutPriority: baseline
+  description: Monochromator Bragg angle
+  deviceTags: [optics, mono]
+  onFailure: retry
+  enabled: true
+
+energy:
+  deviceClass: x99xa_bec.devices.mo1_bragg.Energy
+  deviceConfig:
+    prefix: ""
+    device_mapping: {bragg: mo1_bragg}
+  needs: [mo1_bragg]
+  readoutPriority: baseline
+  description: Photon energy (pseudo motor on mo1_bragg)
+  deviceTags: [optics, mono]
+  enabled: true
