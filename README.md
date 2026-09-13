@@ -114,7 +114,17 @@ onto unfamiliar code, or when you suspect the surrounding module.
 ```
 /bec-focused-review https://github.com/bec-project/bec_widgets/pull/1285
 /bec-deep-review feature/nidaq-rewrite..main
+/bec-focused-review 1285 --prove
 ```
+
+**Prove mode** (`prove` / `--prove`) additionally leaves runnable evidence for the developer on a
+local branch `review/<N>-proof` in a dedicated worktree: failing unit tests written as the future
+regression tests (`tests/review_proof/`), reproduction scripts and BEC IPython client recipes
+(`review_proof/`), plus a README mapping each finding to its proof and the observed output. The
+worktree and its environment are created with
+[agent-worktree-manager](https://github.com/wyzula-jan/agent_worktree_manager) (`awm`) when it is
+installed, otherwise with `git worktree` and a venv. Nothing is pushed and nothing is fixed on that
+branch.
 
 ## Repository layout
 

@@ -1,6 +1,6 @@
 ---
 name: bec-deep-review
-description: Deep code review of a BEC-ecosystem pull request, branch pair or working tree (bec, bec_widgets, ophyd_devices, beamline plugin repos). Reviews the change AND the code it lives in - bugs, bad design, thread/Qt/Redis pitfalls, test gaps - and also flags problems found outside the change. Use whenever the user asks for a thorough / deep / full review, an audit of a PR or branch, or "review this branch against main and tell me everything that is wrong". For a review restricted to what the change itself introduced, use bec-focused-review instead.
+description: Deep code review of a BEC-ecosystem pull request, branch pair or working tree (bec, bec_widgets, ophyd_devices, beamline plugin repos). Reviews the change AND the code it lives in - bugs, bad design, thread/Qt/Redis pitfalls, test gaps - and also flags problems found outside the change. Use whenever the user asks for a thorough / deep / full review, an audit of a PR or branch, or "review this branch against main and tell me everything that is wrong". For a review restricted to what the change itself introduced, use bec-focused-review instead. Supports a prove mode (say "prove" / --prove) that leaves failing regression tests, repro scripts and BEC IPython recipes on a local review/<N>-proof branch in its own worktree (created with agent-worktree-manager when available).
 metadata:
   author: bec-project
   version: "0.1"
@@ -113,6 +113,35 @@ the diff touches in a dedicated environment (`python -m pytest --random-order -q
 for bec_widgets add `-p no:cacheprovider` and make sure `pyside6-uic` is on `PATH`). An
 unproven claim becomes a finding of category `unverified-claim`.
 
+## Phase 3b - Prove mode (only when asked)
+
+Activate when the invocation contains `prove` / `--prove` or the user asks for proofs,
+reproductions the developer can run, or a branch with failing tests. It roughly doubles the cost
+of the review, so it is never on by default. Follow [references/proof-branch.md](references/proof-branch.md)
+exactly; the essentials:
+
+1. **Sandbox first.** If `agent-worktree-manager` is installed (`awm --version`) and an `awm.toml`
+   governs the repo, create the sandbox with it - worktree plus reproduced environment in one step:
+   `awm --root <project> create review-<N>-proof --repo <alias> --ref <head-sha>` (dry-run first),
+   then run everything via `awm --root <project> run --repo <alias> review-<N>-proof -- <cmd>`.
+   Otherwise `git worktree add ../<repo>_review-<N>-proof -b review/<N>-proof <head-sha>` plus a
+   venv with the reviewed code editable-installed. Prove that imports resolve to the worktree
+   before writing anything. Never use the user's checkout.
+2. **Branch `review/<N>-proof` from the reviewed head.** Only proof artefacts go on it: failing
+   unit tests under `tests/review_proof/` written as the regression tests the fix should make
+   pass, scripts under `review_proof/scripts/` for leaks/races/timing, BEC IPython recipes under
+   `review_proof/ipython/` for problems only visible against running services (simulated config
+   only, never hardware), and `review_proof/README.md` mapping finding -> proof -> command ->
+   observed output. Commit per finding (`test(review): proof for finding <n> - <slug>`). Do not
+   push. Do not fix anything on this branch.
+3. **Scope: CONFIRMED and PLAUSIBLE correctness and lifecycle findings only.** Cleanup, design and
+   convention findings get no proof.
+4. **A proof counts only if you ran it in the sandbox and it failed for the stated reason.** A
+   finding whose proof cannot be made to fail is downgraded to "unverified candidate"; its
+   half-finished proof is not committed. Prove mode must raise confidence, not volume.
+5. Leave the sandbox in place for the developer and end the report with the "Proof branch" block
+   (branch, worktree/env paths, fetch command, run command, cleanup command).
+
 ## Output
 
 Rank most-severe first, cap at 15 (correctness before design before cleanup; `introduced` before
@@ -133,6 +162,7 @@ Author's claims: <claim> - <verified / unverified (why)>.
 #### 1. [introduced|exposed|pre-existing] <one-line defect> - <file>:<line>  (<CONFIRMED|PLAUSIBLE>)
 What is wrong and why it matters (2-4 sentences, concrete failure scenario).
 Evidence: <test output / code path / repro snippet>.
+Proof (prove mode): <path> - <command> -> <decisive output>.
 Suggested fix: <one or two sentences, name the helper/hook/base-class method to use>.
 
 ### Design notes (no single failing line)

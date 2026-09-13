@@ -70,6 +70,8 @@ def check(skill_dir: Path) -> list[str]:
 SHARED_COPIES = [
     ("bec-deep-review/references/bec-review-checklist.md",
      "bec-focused-review/references/bec-review-checklist.md"),
+    ("bec-deep-review/references/proof-branch.md",
+     "bec-focused-review/references/proof-branch.md"),
 ]
 
 

@@ -8,7 +8,7 @@ so everything must stay tool-agnostic and self-contained per skill folder.
 
 - **One folder per skill; no cross-folder references.** Skills are symlinked individually into
   agent skill directories, so `../other-skill/...` breaks. If two skills need the same reference
-  (currently `references/bec-review-checklist.md` in both review skills), keep the copies
+  (currently `references/bec-review-checklist.md` and `references/proof-branch.md` in both review skills), keep the copies
   byte-identical; `scripts/validate_skills.py` checks that.
 - **Frontmatter**: `name` equals the folder name, `[a-z0-9-]`, no leading/trailing/double hyphen;
   `description` states what the skill does *and* when to trigger it, under 1024 chars, slightly
