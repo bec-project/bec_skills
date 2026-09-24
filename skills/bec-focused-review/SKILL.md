@@ -1,6 +1,6 @@
 ---
 name: bec-focused-review
-description: Focused code review of a BEC-ecosystem pull request, branch pair or working tree (bec, bec_widgets, ophyd_devices, beamline plugin repos) that judges only what the change itself introduces. Pre-existing problems it stumbles on are reported, but in a strictly separate section so the author is never blamed for inherited code. Use whenever the user asks to review a PR / branch / diff, "check my changes", "is this PR good to merge", or wants review comments for a merge request. For a thorough audit of the whole touched area including inherited bugs, use bec-deep-review instead. Supports a prove mode (say "prove" / --prove) that leaves failing regression tests, repro scripts and BEC IPython recipes on a local review/<N>-proof branch in its own worktree (created with agent-worktree-manager when available).
+description: Focused code review of a BEC-ecosystem pull request, branch pair or working tree (bec, bec_widgets, ophyd_devices, beamline plugin repos) that judges only what the change itself introduces. Pre-existing problems it stumbles on are reported, but in a strictly separate section so the author is never blamed for inherited code. Use whenever the user asks to review a PR / branch / diff, "check my changes", "is this PR good to merge", or wants review comments for a merge request. For a thorough audit of the whole touched area including inherited bugs, use bec-deep-review instead. Supports a prove mode (say "prove" / --prove) that leaves failing regression tests, repro scripts and BEC IPython recipes on a local review/<N>-proof branch in its own worktree (created with agent-worktree-manager when available), and a post mode (say "post" / --post) that publishes the review on the PR as a single COMMENT review rendered from the repo's review template, after the user approves the text.
 metadata:
   author: bec-project
   version: "0.1"
@@ -14,8 +14,8 @@ careful BEC maintainer block or request changes on this PR for this". Problems y
 code the PR merely touches or sits next to are worth a sentence in a separate section, never a
 finding against the change.
 
-The deliverable is a report in chat (template at the end). Never post to GitHub, never push,
-never fix anything unless the user asks afterwards.
+The deliverable is a report in chat (template at the end). Never post to GitHub (outside post
+mode), never push, never fix anything unless the user asks afterwards.
 
 ## Phase 0 - Gather the diff
 
@@ -132,6 +132,23 @@ exactly; the essentials:
 5. Leave the sandbox in place for the developer and end the report with the "Proof branch" block
    (branch, worktree/env paths, fetch command, run command, cleanup command).
 
+## Phase 4 - Post mode (only when asked)
+
+Activate when the invocation contains `post` / `--post` or the user asks to post, publish or
+submit the review on the PR - including after the chat report was delivered. PR targets only.
+Follow [references/post-review.md](references/post-review.md) exactly; the essentials:
+
+1. **Render, don't rewrite.** Map the finished chat report onto the target repository's
+   `.github/pull_request_review_template.md` (fallback: `assets/pull_request_review_template.md`):
+   visible verdict, reviewer, full model designation and reviewed commit; everything else in the
+   collapsed details. Permalinks at the head SHA, no local paths.
+2. **One review per model designation.** Edit your own earlier COMMENT review with the same
+   `**Model:**` line in place instead of adding a second one.
+3. **COMMENT only.** The verdict is text; never submit a formal APPROVE or REQUEST_CHANGES - an
+   agent approval would count towards required reviews and cannot be amended later.
+4. **Head unchanged, user agreed.** Re-check the head SHA, show the complete body, and post only
+   after an explicit yes. Report the review URL.
+
 ## Output
 
 At most 10 findings against the change, most severe first: correctness, then lifecycle, then
@@ -166,5 +183,5 @@ Suggested fix: <one or two sentences; name the helper / hook / base-class method
 
 The last section matters: a focused review that lists only problems reads as hostile and hides
 what the reviewer actually verified. Do not create artifacts, files or GitHub comments for the
-report unless asked. If the user later asks you to fix findings and a `ReportFindings` tool
+report unless asked; post mode is the only way this skill writes to GitHub. If the user later asks you to fix findings and a `ReportFindings` tool
 exists, re-report each with an `outcome`.

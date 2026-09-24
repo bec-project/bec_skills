@@ -107,8 +107,8 @@ Any tool implementing the Agent Skills spec (Cursor, OpenCode, ...) can point at
 ## Using the review skills
 
 Both take the same targets: a PR number/URL (`gh` must be authenticated), `base..head`, a branch
-name (compared against `main`), or nothing (working tree). They never post to GitHub or modify
-files. Pick `bec-focused-review` for merge decisions and `bec-deep-review` for audits, onboarding
+name (compared against `main`), or nothing (working tree). By default they never post to GitHub or
+modify files. Pick `bec-focused-review` for merge decisions and `bec-deep-review` for audits, onboarding
 onto unfamiliar code, or when you suspect the surrounding module.
 
 ```
@@ -125,6 +125,17 @@ worktree and its environment are created with
 [agent-worktree-manager](https://github.com/wyzula-jan/agent_worktree_manager) (`awm`) when it is
 installed, otherwise with `git worktree` and a venv. Nothing is pushed and nothing is fixed on that
 branch.
+
+**Post mode** (`post` / `--post`, `bec-focused-review` only) publishes the finished review on the PR
+as one GitHub review, rendered from the target repo's `.github/pull_request_review_template.md`
+(bundled fallback: `assets/pull_request_review_template.md`). It is always submitted as a
+`COMMENT` - the APPROVE / REQUEST CHANGES verdict is text, so an agent never supplies a required
+approval - and re-running it edits the earlier review with the same model designation instead of
+adding another. The complete body is shown for confirmation before anything is sent.
+
+```
+/bec-focused-review 1285 --post
+```
 
 ## Repository layout
 
