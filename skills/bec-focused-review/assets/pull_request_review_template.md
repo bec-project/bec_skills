@@ -17,7 +17,8 @@ Include the full model designation supplied by the review environment: model
 family/version, variant, and reasoning effort, for example
 "<model family> <version>, <variant>, effort <level>". Do not shorten it or omit
 known settings. Do not guess missing details; mark unavailable components as
-"not reported". For a human review, omit the model field.
+"not reported". For a human review, omit the model field and the disclosure
+line below the reviewed commit.
 Before posting, check for an existing COMMENT review on the same PR by the same
 account with the exact same full model designation. Edit that review's body in
 place rather than adding a duplicate, updating its verdict, reviewed commit,
@@ -31,6 +32,8 @@ describe them explicitly: the commit alone does not identify that review scope.
 **Reviewer:** {{reviewer or agent name}}
 **Model:** {{full model designation: family/version, variant, reasoning effort}}
 **Reviewed commit:** [{{full head SHA}}]({{repository URL}}/commit/{{full head SHA}})
+
+> This review was written by {{model}} running in {{agent or harness}} with {{skill, if any}}, then read and posted by @{{GitHub account}}.
 
 <details>
 <summary>Review details</summary>

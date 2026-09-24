@@ -140,8 +140,9 @@ Follow [references/post-review.md](references/post-review.md) exactly; the essen
 
 1. **Render, don't rewrite.** Map the finished chat report onto the target repository's
    `.github/pull_request_review_template.md` (fallback: `assets/pull_request_review_template.md`):
-   visible verdict, reviewer, full model designation and reviewed commit; everything else in the
-   collapsed details. Permalinks at the head SHA, no local paths.
+   visible verdict, reviewer (harness + this skill), full model designation, reviewed commit and a
+   one-line disclosure "written by <model> in <harness> with this skill, posted by @<account>";
+   everything else in the collapsed details. Permalinks at the head SHA, no local paths.
 2. **One review per model designation.** Edit your own earlier COMMENT review with the same
    `**Model:**` line in place instead of adding a second one.
 3. **COMMENT only.** The verdict is text; never submit a formal APPROVE or REQUEST_CHANGES - an
