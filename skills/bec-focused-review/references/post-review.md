@@ -44,7 +44,16 @@ Rules for the body:
 
 - **Model line**: the full designation your harness reports (model name/version, variant,
   reasoning effort). Never guess a component; write `not reported` for it. **Reviewer**: the agent
-  / harness name (e.g. the CLI you run in), not the GitHub account.
+  / harness name (e.g. the CLI you run in) plus this skill, not the GitHub account. Link the skill
+  immutably when its folder is a git checkout (`git -C <skill folder> rev-parse HEAD` ->
+  `https://github.com/bec-project/bec_skills/blob/<sha>/skills/bec-focused-review/SKILL.md`),
+  otherwise name it.
+- **Disclosure line**: directly under the reviewed commit, visible (outside `<details>`), one
+  quoted sentence saying who wrote and who posted the review:
+  `> This review was written by <model> running in <harness> with the bec-focused-review skill,
+  then read and posted by @<account>.` - `<account>` is the `gh api user` login. Keep it even when
+  the repository's template has no such line; it is what makes an agent review recognisable in
+  the PR timeline, since the review appears under a person's account.
 - **Links are immutable**: commit links `https://github.com/<owner>/<repo>/commit/<sha>`, source
   links `https://github.com/<owner>/<repo>/blob/<head sha>/<path>#L<line>` - never `blob/main`.
 - **No local detail**: no absolute paths, scratch directories, venv or host names, usernames. Test

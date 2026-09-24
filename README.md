@@ -131,7 +131,9 @@ as one GitHub review, rendered from the target repo's `.github/pull_request_revi
 (bundled fallback: `assets/pull_request_review_template.md`). It is always submitted as a
 `COMMENT` - the APPROVE / REQUEST CHANGES verdict is text, so an agent never supplies a required
 approval - and re-running it edits the earlier review with the same model designation instead of
-adding another. The complete body is shown for confirmation before anything is sent.
+adding another. The review names the harness, the skill and the full model designation, and a
+visible disclosure line states that an agent wrote it and which account posted it. The complete
+body is shown for confirmation before anything is sent.
 
 ```
 /bec-focused-review 1285 --post
