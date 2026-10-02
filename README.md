@@ -14,7 +14,7 @@ Claude Code, OpenAI Codex CLI and Gemini CLI.
 | [`bec-new-plot-widget`](skills/bec-new-plot-widget/SKILL.md) | New plotting widget on `PlotBase`: imposed layout/properties, toolbar bundles, settings panels, throttled data flow, pyqtgraph performance and cleanup. |
 | [`bec-new-scan`](skills/bec-new-scan/SKILL.md) | New scan on the v4 `ScanBase` template: all ten hooks, `ScanActions`/`ScanComponents`, typed arguments, plugin export, v4 tests. |
 | [`bec-device-config`](skills/bec-device-config/SKILL.md) | Device configuration YAML: schema, readoutPriority/onFailure choices, composite configs with `!include`, validation with `ophyd_test`, loading with `bec.config`. |
-| [`bec-new-device`](skills/bec-new-device/SKILL.md) | New ophyd device on `PSIDeviceBase`: hooks, status objects, BEC signals for async/preview/progress/file data, YAML entry, tests with `patched_device`. |
+| [`bec-new-device`](skills/bec-new-device/SKILL.md) | New ophyd device following `ophyd_devices/AGENTS.md`: reusable control class vs. `PSIDeviceBase` hooks, status objects, BEC signals for async/preview/progress/file data, example config, tests with `patched_device`. |
 
 Every skill carries `references/` (loaded on demand) and, where useful, `assets/` with runnable
 templates. Skills are self-contained; nothing depends on files outside its own folder.
