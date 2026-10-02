@@ -68,12 +68,18 @@ class MyWidget(BECWidget, QWidget):          # BECWidget FIRST, then exactly one
 
 - Subscribe with bound methods: `self.bec_dispatcher.connect_slot(self.on_readback, MessageEndpoints.device_readback(name))`.
   Lambdas/partials must pass `owner=self` or they outlive the widget. Every dispatcher slot is
-  `@SafeSlot(dict, dict)` and receives `(content, metadata)`.
+  `@SafeSlot(dict, dict)` and receives `(content, metadata)`. Per-subscription context goes in
+  `connect_slot(..., cb_info={"scan_id": ...})` and arrives as `metadata["cb_info"]` (key absent
+  when no `cb_info` was given); never call `self.sender()` in a dispatcher slot.
 - Re-subscribing to a different device/scan: `disconnect_slot` the old endpoint first; keep the
   current endpoint in an attribute so `cleanup()` and re-targeting share one code path.
-- Decorate every slot with `@SafeSlot(...)` (`popup_error=True` for user-triggered actions,
-  `verify_sender=True` for slots that may fire after the sender died). Unhandled exceptions in a
-  plain `@Slot` kill the event loop.
+- Decorate every slot with `@SafeSlot(...)` (`popup_error=True` for user-triggered actions).
+  Unhandled exceptions in a plain `@Slot` kill the event loop. The dispatcher drops deliveries to
+  disconnected slots and to owners that were cleaned up or deleted, so slots need no sender check.
+- Older code: the bec_widgets release with the dispatcher relay (bec-project/bec_widgets#1289)
+  removed `@SafeSlot(..., verify_sender=True)` - it now fails at import with `TypeError:
+  QtCore.Slot() got an unexpected keyword argument 'verify_sender'` - and `self.sender().cb_info`.
+  Port both when you meet them; mapping in [references/lifecycle.md](references/lifecycle.md).
 - Never block the GUI thread: device moves and RPC calls go through `self.submit_task(fn, *args, on_complete=..., on_failed=...)`
   (global `QThreadPool`); pass `on_failed` in the call, not afterwards. Never touch widgets from the
   worker - deliver results via the completion slot.
@@ -149,6 +155,7 @@ and closes cleanly - a single run with `PYTHONFAULTHANDLER=1` catches most segfa
 - [ ] `class X(BECWidget, QWidget)`, `parent` first, one `super().__init__`, `qtpy` imports only
 - [ ] `PLUGIN`, `ICON_NAME`, `USER_ACCESS` (base splatted when needed); `RPC = False` for helpers
 - [ ] every slot `@SafeSlot`; dispatcher subscriptions via bound methods or `owner=self`
+- [ ] subscription context read from `metadata["cb_info"]`; no `verify_sender=`, no `self.sender()`
 - [ ] no blocking I/O on the GUI thread; `submit_task` with `on_failed`
 - [ ] `cleanup()` stops timers/threads/external callbacks and calls `super().cleanup()`
 - [ ] `bw-generate-cli --target ...` run; Designer files present; client import works

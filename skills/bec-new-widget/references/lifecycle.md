@@ -75,6 +75,45 @@ throttle heavy redraws with `pg.SignalProxy(signal, rateLimit=25, slot=...)` or 
 `QTimer`. When a subscription is scan-scoped (`device_async_signal(scan_id, ...)`) disconnect
 the previous scan's endpoint when the next scan starts, not only in `cleanup()`.
 
+Callback contract: the slot receives `(content, metadata)`; `cb_info` passed to `connect_slot`
+comes back as a copy in `metadata["cb_info"]` (the key is absent when `cb_info=None`), so one
+bound method can serve several subscriptions and tell them apart:
+
+```python
+self.bec_dispatcher.connect_slot(
+    self.on_async_readback,
+    MessageEndpoints.device_async_signal(scan_id, device, signal),
+    from_start=True,
+    cb_info={"scan_id": scan_id},
+)
+
+@SafeSlot(dict, dict)
+def on_async_readback(self, msg: dict, metadata: dict):
+    cb_info = metadata.get("cb_info")
+    if not isinstance(cb_info, dict) or cb_info.get("scan_id") != self.scan_id:
+        return  # late message from the previous scan
+    ...
+```
+
+Do not call `self.sender()` in a dispatcher slot: delivery goes through an internal relay, so
+the sender is not the subscription. Deliveries still queued when a slot is disconnected, or when
+its owner (the bound method's instance or `owner=`) is cleaned up, deleted or garbage-collected,
+are dropped.
+
+### Legacy mapping (before bec-project/bec_widgets#1289)
+
+Releases before the dispatcher relay connected the slot directly to the per-subscription
+wrapper. Port old code when you meet it:
+
+| before #1289 | from the release with #1289 |
+|---|---|
+| `@SafeSlot(dict, dict, verify_sender=True)` | `@SafeSlot(dict, dict)` - the keyword is forwarded to `Slot()` and fails at import with `TypeError: QtCore.Slot() got an unexpected keyword argument 'verify_sender'` |
+| `self.sender().cb_info["scan_id"]` / `hasattr(self.sender(), "cb_info")` | `metadata["cb_info"]["scan_id"]` / `isinstance(metadata.get("cb_info"), dict)` |
+| tests patching `widget.sender` to inject `cb_info` | pass `{"cb_info": {...}, ...}` as the slot's `metadata` |
+
+To tell which contract the installed bec_widgets uses: a pre-#1289 `bec_widgets/utils/error_popups.py`
+still mentions `verify_sender`.
+
 ## Threads
 
 - Only the GUI thread touches `QWidget`s, `QGraphicsItem`s and pyqtgraph items. Workers return
@@ -87,9 +126,10 @@ the previous scan's endpoint when the next scan starts, not only in `cleanup()`.
 
 ## SafeSlot / SafeProperty / SafeConnect
 
-- `@SafeSlot(*types, popup_error=False, verify_sender=False, raise_error=False)`: wraps `@Slot`,
+- `@SafeSlot(*types, popup_error=False, raise_error=False)`: wraps `@Slot`,
   logs `SafeSlot error in slot ...`, optionally shows a popup. Stack two decorators for
-  overloads (`@SafeSlot(str)` + `@SafeSlot()`).
+  overloads (`@SafeSlot(str)` + `@SafeSlot()`). Any other keyword is passed to `Slot()`, which is
+  why a leftover `verify_sender=True` breaks the import (see the legacy mapping above).
 - `@SafeProperty(type, default=None, auto_emit=False, popup_error=False)`: crash-proof
   `Qt Property`; with `auto_emit=True` the setter emits `property_changed(name, value)` if the
   widget defines that signal; getters tagged for `export_settings()`.
@@ -99,8 +139,9 @@ the previous scan's endpoint when the next scan starts, not only in `cleanup()`.
 ## Segfault patterns seen in this codebase
 
 1. A widget deleted by Qt while a Python-side callback (dispatcher, ophyd, timer) still calls
-   into it. Guard with `verify_sender=True` slots, `shiboken6.isValid(obj)` before use, and
-   release callbacks in `cleanup()`.
+   into it. Dispatcher deliveries are dropped once the owner is cleaned up or deleted, provided
+   lambdas/partials were registered with `owner=self`; for ophyd/bec_lib callbacks and timers,
+   check `shiboken6.isValid(obj)` before use and release them in `cleanup()`.
 2. Overriding `event()` to intercept `DeferredDelete` - every event gets wrapped by shiboken and
    stale pointer-cache entries raise inside the binding. Override `deleteLater()`/`closeEvent`
    as the base does instead.
