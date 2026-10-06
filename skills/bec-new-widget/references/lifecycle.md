@@ -100,20 +100,6 @@ the sender is not the subscription. Deliveries still queued when a slot is disco
 its owner (the bound method's instance or `owner=`) is cleaned up, deleted or garbage-collected,
 are dropped.
 
-### Legacy mapping (before bec-project/bec_widgets#1289)
-
-Releases before the dispatcher relay connected the slot directly to the per-subscription
-wrapper. Port old code when you meet it:
-
-| before #1289 | from the release with #1289 |
-|---|---|
-| `@SafeSlot(dict, dict, verify_sender=True)` | `@SafeSlot(dict, dict)` - the keyword is forwarded to `Slot()` and fails at import with `TypeError: QtCore.Slot() got an unexpected keyword argument 'verify_sender'` |
-| `self.sender().cb_info["scan_id"]` / `hasattr(self.sender(), "cb_info")` | `metadata["cb_info"]["scan_id"]` / `isinstance(metadata.get("cb_info"), dict)` |
-| tests patching `widget.sender` to inject `cb_info` | pass `{"cb_info": {...}, ...}` as the slot's `metadata` |
-
-To tell which contract the installed bec_widgets uses: a pre-#1289 `bec_widgets/utils/error_popups.py`
-still mentions `verify_sender`.
-
 ## Threads
 
 - Only the GUI thread touches `QWidget`s, `QGraphicsItem`s and pyqtgraph items. Workers return
@@ -128,8 +114,7 @@ still mentions `verify_sender`.
 
 - `@SafeSlot(*types, popup_error=False, raise_error=False)`: wraps `@Slot`,
   logs `SafeSlot error in slot ...`, optionally shows a popup. Stack two decorators for
-  overloads (`@SafeSlot(str)` + `@SafeSlot()`). Any other keyword is passed to `Slot()`, which is
-  why a leftover `verify_sender=True` breaks the import (see the legacy mapping above).
+  overloads (`@SafeSlot(str)` + `@SafeSlot()`).
 - `@SafeProperty(type, default=None, auto_emit=False, popup_error=False)`: crash-proof
   `Qt Property`; with `auto_emit=True` the setter emits `property_changed(name, value)` if the
   widget defines that signal; getters tagged for `export_settings()`.

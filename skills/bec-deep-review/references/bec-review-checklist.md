@@ -14,12 +14,6 @@ line names a concrete defect class, where it hides, and how to confirm it.
   `parent=parent` in one `super().__init__` call; `theme_update`/`parent_dock` kwargs no longer exist.
 - **Slots**: any method connected to a signal or registered with the dispatcher without
   `@SafeSlot` - an exception there kills the event loop. Dispatcher slots take `(content, metadata)`.
-- **Dispatcher callback contract** (bec_widgets with bec-project/bec_widgets#1289 onwards):
-  `@SafeSlot(..., verify_sender=True)` fails at import (`TypeError: QtCore.Slot() got an unexpected
-  keyword argument 'verify_sender'`); `self.sender()` / `sender().cb_info` in a dispatcher slot no
-  longer reaches the subscription - context is in `metadata["cb_info"]`. Confirm by grepping the
-  touched widgets for `verify_sender` and `sender()`; bites plugin repos when their bec_widgets pin
-  moves.
 - **Dispatcher ownership**: `connect_slot` with a lambda/partial and no `owner=`; scan-scoped
   endpoints (`device_async_signal(scan_id, ...)`, `dap_response(f"{scan_id}-{gui_id}")`) not
   disconnected when the next scan starts (unbounded subscriptions).

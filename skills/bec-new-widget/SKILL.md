@@ -76,10 +76,6 @@ class MyWidget(BECWidget, QWidget):          # BECWidget FIRST, then exactly one
 - Decorate every slot with `@SafeSlot(...)` (`popup_error=True` for user-triggered actions).
   Unhandled exceptions in a plain `@Slot` kill the event loop. The dispatcher drops deliveries to
   disconnected slots and to owners that were cleaned up or deleted, so slots need no sender check.
-- Older code: the bec_widgets release with the dispatcher relay (bec-project/bec_widgets#1289)
-  removed `@SafeSlot(..., verify_sender=True)` - it now fails at import with `TypeError:
-  QtCore.Slot() got an unexpected keyword argument 'verify_sender'` - and `self.sender().cb_info`.
-  Port both when you meet them; mapping in [references/lifecycle.md](references/lifecycle.md).
 - Never block the GUI thread: device moves and RPC calls go through `self.submit_task(fn, *args, on_complete=..., on_failed=...)`
   (global `QThreadPool`); pass `on_failed` in the call, not afterwards. Never touch widgets from the
   worker - deliver results via the completion slot.
@@ -155,7 +151,7 @@ and closes cleanly - a single run with `PYTHONFAULTHANDLER=1` catches most segfa
 - [ ] `class X(BECWidget, QWidget)`, `parent` first, one `super().__init__`, `qtpy` imports only
 - [ ] `PLUGIN`, `ICON_NAME`, `USER_ACCESS` (base splatted when needed); `RPC = False` for helpers
 - [ ] every slot `@SafeSlot`; dispatcher subscriptions via bound methods or `owner=self`
-- [ ] subscription context read from `metadata["cb_info"]`; no `verify_sender=`, no `self.sender()`
+- [ ] subscription context read from `metadata["cb_info"]`, not `self.sender()`
 - [ ] no blocking I/O on the GUI thread; `submit_task` with `on_failed`
 - [ ] `cleanup()` stops timers/threads/external callbacks and calls `super().cleanup()`
 - [ ] `bw-generate-cli --target ...` run; Designer files present; client import works
