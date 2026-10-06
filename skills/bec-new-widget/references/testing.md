@@ -44,7 +44,7 @@ w.on_scan_status({"scan_id": "abc", "status": "open"}, {})
 
 For message classes use `bec_lib.messages` (`ScanStatusMessage(...)`) and pass `.content`, `.metadata`.
 A slot that reads subscription context gets it the way the dispatcher delivers it, inside
-`metadata` - do not patch `widget.sender`:
+`metadata`:
 
 ```python
 w.on_async_readback(msg.content, {**msg.metadata, "cb_info": {"scan_id": w.scan_id}})
@@ -99,5 +99,4 @@ singleton, device list) will flake there. `pyside6-uic` must be on `PATH` for su
 | `Failed to close all widgets: [<...>]` | a dialog/popup/child window created without being closed; or a widget created without `create_widget`/`qtbot.addWidget` |
 | threads_check failure | `QThread`/`threading.Thread` not joined; a `submit_task` worker still running at teardown (wait for it with `qtbot.waitUntil`) |
 | `RuntimeError: Internal C++ object already deleted` | a callback ran after the widget died - release ophyd/bec_lib callbacks and timers in `cleanup()`, register lambda/partial dispatcher slots with `owner=self` |
-| `TypeError: QtCore.Slot() got an unexpected keyword argument 'verify_sender'` at import | `@SafeSlot(..., verify_sender=True)` on a bec_widgets with #1289 - drop the keyword, read `metadata["cb_info"]` instead of `self.sender()` |
 | `Lambda ... without owner` warning | `connect_slot` with a lambda/partial and no `owner=self` |

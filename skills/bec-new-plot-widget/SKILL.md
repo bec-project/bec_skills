@@ -94,9 +94,9 @@ Details and the settings-dialog pattern: [references/toolbar-and-settings.md](re
 - Scan data: `self.scan_item = self.queue.scan_storage.find_scan_by_ID(scan_id)`; read
   `scan_item.live_data[device][signal].val`. Async devices: subscribe to
   `MessageEndpoints.device_async_signal(scan_id, device, signal)` with `from_start=True`,
-  `cb_info={"scan_id": ...}`, read it back in the slot as `metadata["cb_info"]["scan_id"]` (not
-  `self.sender().cb_info`, gone since bec-project/bec_widgets#1289) and drop messages whose scan ID
-  is not `self.scan_id`; disconnect the previous scan's endpoint when a new scan opens.
+  `cb_info={"scan_id": ...}`, read it back in the slot as `metadata["cb_info"]["scan_id"]` and drop
+  messages whose scan ID is not `self.scan_id`; disconnect the previous scan's endpoint when a new
+  scan opens.
   Device readbacks: `device_readback(name)` / `device_limits(name)`; 1D monitors:
   `device_monitor_1d(name)`; previews: `device_preview(device, signal)`.
 - History mode: accept a `ScanDataContainer` too (`update_scan_info_from_source`), because users
