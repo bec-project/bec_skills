@@ -8,8 +8,17 @@ so everything must stay tool-agnostic and self-contained per skill folder.
 
 - **One folder per skill; no cross-folder references.** Skills are symlinked individually into
   agent skill directories, so `../other-skill/...` breaks. If two skills need the same reference
-  (currently `references/bec-review-checklist.md` and `references/proof-branch.md` in both review skills), keep the copies
+  (currently `references/bec-review-checklist.md` and `references/proof-branch.md` in both review skills,
+  and `references/repo-context.md` in `bec-new-widget` and `bec-new-plot-widget`), keep the copies
   byte-identical; `scripts/validate_skills.py` checks that.
+- **Core repo vs beamline plugin repo.** Most users are scientists in a beamline plugin repo. Every
+  skill that creates code must say where the code goes in both cases and when to ask the user.
+  The widget skills point at their `references/repo-context.md` copy; `bec-new-scan` keeps its
+  scan-specific routing (plugin scan, `ScanModifier`, core) in `SKILL.md`.
+- **Test fixtures come from the packages.** Widget tests use the fixtures shipped in
+  `bec_widgets.tests` (`fixtures.py` star-imported by the widget-test conftest, `utils.py`,
+  `client_mocks.py`, `fake_devices.py`); never tell an agent to import from `tests.unit_tests...`
+  or to copy fixtures into a plugin repo.
 - **Frontmatter**: `name` equals the folder name, `[a-z0-9-]`, no leading/trailing/double hyphen;
   `description` states what the skill does *and* when to trigger it, under 1024 chars, slightly
   "pushy" (agents under-trigger). Optional `metadata:` map only; avoid Claude-only fields

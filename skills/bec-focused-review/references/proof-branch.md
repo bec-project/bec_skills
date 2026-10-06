@@ -64,8 +64,9 @@ tests/review_proof/
 
 `tests/review_proof/` is deliberately outside the normal test packages so a stray merge cannot
 break CI, but `python -m pytest tests/review_proof` still collects it. The `conftest.py` imports
-the fixtures the repo's own tests use (bec_widgets: `from tests.unit_tests.conftest import *` and
-`from tests.unit_tests.client_mocks import *`; bec_server scans: the `scan_fixtures` plugin;
+the fixtures the repo's own tests use (bec_widgets and widget proofs in a beamline plugin repo:
+`from bec_widgets.tests.fixtures import *` plus `from bec_widgets.tests.utils import create_widget`,
+the packaged fixtures of bec_widgets >= 3.38; bec_server scans: the `scan_fixtures` plugin;
 ophyd_devices: `patched_device`). Never re-implement fixtures.
 
 Commit per finding, message `test(review): proof for finding <n> - <slug>`; a final
@@ -95,8 +96,8 @@ Expected after the fix: exactly one device_async_signal subscription per curve."
 from bec_lib.endpoints import MessageEndpoints
 from bec_widgets.widgets.plots.waveform.waveform import Waveform
 
-from tests.unit_tests.client_mocks import create_dummy_scan_item, mocked_client  # noqa: F401
-from tests.unit_tests.conftest import create_widget
+from bec_widgets.tests.client_mocks import create_dummy_scan_item
+from bec_widgets.tests.utils import create_widget
 
 
 def test_review_3_async_subscription_is_swapped_per_scan(qtbot, mocked_client, monkeypatch):
