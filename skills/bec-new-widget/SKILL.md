@@ -17,6 +17,11 @@ before writing `cleanup()` and [references/testing.md](references/testing.md) be
 
 ## 1. Where does it go?
 
+Decide first whether this is a core `bec_widgets` task or a beamline plugin repo task - most
+users are scientists working in their beamline's plugin repo. Check the repository you are in and
+ask when it is unclear or the request does not fit it; the detection table and the "ask instead of
+guessing" rules are in [references/repo-context.md](references/repo-context.md).
+
 - **Core (`bec_widgets`)** only for beamline-agnostic widgets:
   `bec_widgets/widgets/<domain>/<snake_name>/` with `domain` in `control`, `plots`, `services`,
   `utility`, `editors`, `progress`, `containers`, `dap`. Regenerate the client with
@@ -28,6 +33,7 @@ before writing `cleanup()` and [references/testing.md](references/testing.md) be
   `bw-generate-cli --target <plugin>`. Scaffold with `bec-plugin-manager create widget <snake_name>`
   (copier template, optional `.ui` file, commits the scaffold) when it can run interactively;
   otherwise create the directory by hand from [assets/widget_template.py](assets/widget_template.py).
+  Import core classes from `bec_widgets`; never copy or edit core modules from a plugin task.
   Details: [references/plugin-repo.md](references/plugin-repo.md).
 
 Check first whether a widget with the same purpose already exists (`bec_widgets/widgets/**`,
@@ -118,28 +124,40 @@ holding widgets. Full list with reasons: [references/lifecycle.md](references/li
 
 ## 6. Tests
 
-Use the repository fixtures - they are the leak detector:
+Use the shared fixtures shipped in `bec_widgets.tests` (bec_widgets >= 3.38) - they are the leak
+detector, and core and plugin repos load them the same way. The widget-test `conftest.py`
+(`tests/unit_tests/` in core, already present; `tests/tests_bec_widgets/` in a plugin repo, create
+it if missing) contains:
 
 ```python
-from .client_mocks import mocked_client      # tests/unit_tests/client_mocks.py
-from .conftest import create_widget          # adds to qtbot + waits exposed
+from bec_widgets.tests.fixtures import *  # noqa: F401,F403
+from bec_widgets.tests.utils import create_widget  # noqa: F401
+```
 
-def test_readback_updates_label(qtbot, mocked_client):
+```python
+from bec_widgets.tests.utils import create_widget   # adds to qtbot + waits exposed
+
+def test_readback_updates_label(qtbot, mocked_client):   # mocked_client: fixture from the conftest
     w = create_widget(qtbot, MyWidget, client=mocked_client, device="samx")
     w.on_readback({"signals": {"samx": {"value": 1.5}}}, {})
     assert w.label.text() == "1.500"
 ```
 
-The autouse fixtures fail a test when any top-level widget, running `QTimer` (patched to a
-tracking class) or Python thread survives, and reset the dispatcher, RPC registry and popup
-singletons. Cover: construction with the mocked client, each `USER_ACCESS` method, each dispatcher
+Never import fixtures from a sibling test module or copy them into the repo; do not replace the
+widget with a hand-written stub to avoid the BEC client - `mocked_client` is that client. The
+autouse fixtures fail a test when any top-level widget, running `QTimer` (patched to a tracking
+class) or Python thread survives, and reset the dispatcher, RPC registry and popup singletons.
+Plugin specifics (dev dependencies, version check, import order): [references/testing.md](references/testing.md).
+
+Cover: construction with the mocked client, each `USER_ACCESS` method, each dispatcher
 slot fed with a hand-built message dict, re-targeting (old subscription gone), theme change
 (`w.apply_theme("dark")`), and a lifecycle test that `close()` runs `cleanup()` exactly once and
 removes the RPC entry. Remember that `@SafeSlot` swallows exceptions: to assert an error path
 call the slot with `_override_slot_params={"raise_error": True}` or assert on unchanged state. Template: [assets/test_template.py](assets/test_template.py). Run:
 
 ```bash
-QT_QPA_PLATFORM=offscreen python -m pytest --random-order -q -p no:cacheprovider tests/unit_tests/test_my_widget.py
+QT_QPA_PLATFORM=offscreen python -m pytest --random-order -q -p no:cacheprovider tests/unit_tests/test_my_widget.py        # core
+QT_QPA_PLATFORM=offscreen python -m pytest --random-order -q -p no:cacheprovider tests/tests_bec_widgets/test_my_widget.py # plugin repo
 ```
 
 Then run the whole unit suite once if you touched shared code, and open the widget in a real
@@ -155,5 +173,6 @@ and closes cleanly - a single run with `PYTHONFAULTHANDLER=1` catches most segfa
 - [ ] no blocking I/O on the GUI thread; `submit_task` with `on_failed`
 - [ ] `cleanup()` stops timers/threads/external callbacks and calls `super().cleanup()`
 - [ ] `bw-generate-cli --target ...` run; Designer files present; client import works
-- [ ] tests use `create_widget`/`mocked_client`, include a lifecycle test, pass in random order
+- [ ] repo decided (core vs plugin, asked if unclear); plugin code imports core, never copies it
+- [ ] tests use the shared `bec_widgets.tests` fixtures via the conftest star import, `create_widget`/`mocked_client`, include a lifecycle test, pass in random order
 - [ ] black/isort formatted; docstrings on the class and public methods

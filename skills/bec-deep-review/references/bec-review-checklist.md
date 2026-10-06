@@ -37,7 +37,12 @@ line names a concrete defect class, where it hides, and how to confirm it.
 - **Imports**: `from PySide6...` (CI fails) - only `PySide6.QtDesigner`/`scripts` are exempt.
 - **Tests**: widgets created without `create_widget`/`qtbot.addWidget`; dialogs opened and not
   closed; order-dependent fixtures (`--random-order` is how CI runs); assertions on pixels
-  instead of `setData` spies; missing lifecycle test for new cleanup logic.
+  instead of `setData` spies; missing lifecycle test for new cleanup logic; fixtures copied or
+  imported from test modules (`tests.unit_tests...`, `.conftest`) instead of the packaged
+  `bec_widgets.tests` ones; a new shared fixture added to a conftest instead of
+  `bec_widgets/tests/fixtures.py` (and to its `__all__`, or the conftest star import skips it).
+  In a beamline plugin repo: widget tests that stub the widget to avoid the BEC client, or a
+  `tests/tests_bec_widgets/` without the conftest star import of `bec_widgets.tests.fixtures`.
 
 ## bec_lib / bec_server (client, scan server, device server, file writer)
 

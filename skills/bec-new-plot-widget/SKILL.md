@@ -18,6 +18,14 @@ unchanged - this skill covers what PlotBase adds on top. Read an existing subcla
 family before writing yours: `waveform/waveform.py` (curves + async data + DAP),
 `image/image_base.py` (2D items, ROI plots), `motor_map/motor_map.py` (device readback driven).
 
+## 0. Core or beamline plugin repo?
+
+A plot for one beamline (its detector, its scan, its layout) belongs in that beamline's plugin
+repo under `<plugin>/bec_widgets/widgets/<snake_name>/`, subclassing `PlotBase` (or `Waveform`,
+`Image`, ...) imported from `bec_widgets` - never a copy of a core plot module. Only
+beamline-agnostic plots go into `bec_widgets/widgets/plots/`. Check which repository you are in and
+ask when the request does not fit it: [references/repo-context.md](references/repo-context.md).
+
 ## 1. Skeleton and what PlotBase already provides
 
 ```python
@@ -150,20 +158,37 @@ pyqtgraph specifics: never `plot_item.clear()` (kills crosshair/indicator items 
 
 ## 7. Tests
 
-Follow `tests/unit_tests/test_plot_base_next_gen.py` and `test_waveform.py`: `create_widget(qtbot, MyPlot, client=mocked_client)`,
+Tests use the shared fixtures shipped in `bec_widgets.tests` (bec_widgets >= 3.38), wired through
+the widget-test conftest exactly as in `bec-new-widget`: `tests/unit_tests/conftest.py` in core,
+`tests/tests_bec_widgets/conftest.py` in a plugin repo (create it), containing
+`from bec_widgets.tests.fixtures import *` and `from bec_widgets.tests.utils import create_widget`.
+Plugin prerequisites:
+
+- Version check: `python -c "import bec_widgets.tests.fixtures"`; an `ImportError` means
+  bec_widgets < 3.38 - ask the user to upgrade it instead of copying fixtures into the plugin.
+- The fixtures need pytest-qt and fakeredis: `pip install "bec_widgets[dev]"`, or add both to the
+  plugin's `[dev]` extra (the copier template does not list them).
+- Importing the fixtures patches `QTimer` only for modules imported afterwards, so keep widget
+  imports out of the plugin's top-level `tests/conftest.py` and out of non-widget test folders.
+
+Follow `tests/unit_tests/test_plot_base_next_gen.py` and `test_waveform.py` in the bec_widgets repo:
+`create_widget(qtbot, MyPlot, client=mocked_client)` (`create_widget` from
+`bec_widgets.tests.utils`, `mocked_client` as a fixture argument),
 trigger toolbar actions via `w.toolbar.components.get_action(name).action.trigger()` and assert the
 property changed, verify data updates by monkeypatching `item.setData` and calling the slot, drive
-scan flow with `create_dummy_scan_item()` + `monkeypatch.setattr(w.queue.scan_storage, "find_scan_by_ID", ...)`,
-call dispatcher slots with raw dicts, close every dialog you open, and add your class to the
-parametrised "subclass" tests in `test_plot_base_next_gen.py` if it lives in core. The autouse
-fixtures fail on leaked timers/widgets/threads. Reference images are not used any more.
+scan flow with `create_dummy_scan_item()` (`from bec_widgets.tests.client_mocks import create_dummy_scan_item`)
++ `monkeypatch.setattr(w.queue.scan_storage, "find_scan_by_ID", ...)`, use `scan_history_factory`
+for history-driven plots, call dispatcher slots with raw dicts, close every dialog you open, and add
+your class to the parametrised "subclass" tests in `test_plot_base_next_gen.py` if it lives in core.
+The autouse fixtures fail on leaked timers/widgets/threads. Reference images are not used any more.
 
 ## Deliverable checklist
 
+- [ ] repo decided (core vs plugin, asked if unclear); plugin subclasses core plots, never copies them
 - [ ] `class X(PlotBase)`, same ctor signature incl. `popups`, `USER_ACCESS = [*PlotBase.USER_ACCESS, ...]`
 - [ ] toolbar via `components.add_safe` + bundles, actions parented, `show_bundles` order set
 - [ ] dispatcher slot → signal → `SignalProxy` → update; scan-scoped endpoints swapped per scan
 - [ ] `setData`-based updates, numpy only, clipToView/downsampling for large data
 - [ ] settings in side panel and popup; `apply_theme` and `add_side_menus` call `super()`
 - [ ] `cleanup()` stops proxies/threads/dialogs, clears items, ends with `super().cleanup()`
-- [ ] `bw-generate-cli --target ...` regenerated; tests cover toolbar, data update, scan flow, lifecycle
+- [ ] `bw-generate-cli --target ...` regenerated; tests use the shared `bec_widgets.tests` fixtures and cover toolbar, data update, scan flow, lifecycle

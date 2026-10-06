@@ -20,6 +20,7 @@ Reference: `beamline_plugins/debye_bec` (any `*_bec` plugin repo has the same sh
       register_<snake_name>.py       # addCustomWidget entry (generated once)
       <snake_name>.ui                # optional, when scaffolded with --use-ui
       <snake_name>_ui.py             # compiled by `bec-plugin-manager edit-ui <snake_name>`
+  tests/tests_bec_widgets/conftest.py               # star-imports bec_widgets.tests.fixtures (create it)
   tests/tests_bec_widgets/test_<snake_name>.py
 ```
 
@@ -63,8 +64,16 @@ plugin classes at import time, so after installation the widget is available as
 
 ## Tests in a plugin repo
 
-Copy the `mocked_client` fixture pattern from `bec_widgets/tests/unit_tests/client_mocks.py`
-(or import `bec_widgets.tests.utils` helpers) into `tests/tests_bec_widgets/conftest.py`; the
-autouse leak fixtures live in `bec_widgets`' own tests, so replicate the ones you need
-(`qapplication` top-level check, `rpc_register` reset) - the copier template already provides a
-conftest with them.
+Use the fixtures bec_widgets ships (>= 3.38) - do not copy `mocked_client` or the leak fixtures
+into the plugin, and do not test a hand-built stub instead of the widget to avoid the BEC client.
+Put this in `tests/tests_bec_widgets/conftest.py` (the copier template only ships a README there):
+
+```python
+from bec_widgets.tests.fixtures import *  # noqa: F401,F403
+from bec_widgets.tests.utils import create_widget  # noqa: F401
+```
+
+and write tests exactly as in core (`create_widget(qtbot, MyWidget, client=mocked_client)`). Keep
+the import in that folder's conftest, not in the repo-wide `tests/conftest.py`, so device and scan
+tests do not get the Qt fixtures. Prerequisites (bec_widgets version check, `bec_widgets[dev]` for
+pytest-qt/fakeredis, the `QTimer` import-order rule) are in [testing.md](testing.md).

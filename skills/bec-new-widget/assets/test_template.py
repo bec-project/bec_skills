@@ -1,16 +1,22 @@
-"""Unit tests for DeviceReadbackLabel - place in tests/unit_tests/test_device_readback_label.py."""
+"""Unit tests for DeviceReadbackLabel.
+
+Place in tests/unit_tests/test_device_readback_label.py (core bec_widgets) or in
+tests/tests_bec_widgets/test_device_readback_label.py (beamline plugin repo). Fixtures such as
+``qtbot`` and ``mocked_client`` come from the widget-test conftest, which star-imports
+``bec_widgets.tests.fixtures`` (bec_widgets >= 3.38); in a plugin repo create that conftest.
+"""
 
 import pytest
 from qtpy.QtCore import QEvent
 from qtpy.QtWidgets import QApplication
 
+from bec_widgets.tests.utils import create_widget
 from bec_widgets.utils.rpc_register import RPCRegister
+
+# core: bec_widgets.widgets.<domain>.device_readback_label...; plugin: <plugin>.bec_widgets.widgets...
 from bec_widgets.widgets.utility.device_readback_label.device_readback_label import (
     DeviceReadbackLabel,
 )
-
-from .client_mocks import mocked_client  # noqa: F401  (fixture)
-from .conftest import create_widget
 
 
 @pytest.fixture
