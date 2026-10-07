@@ -1,6 +1,6 @@
 {
   "name": "bec-skills",
-  "description": "Agent skills for BEC (Beamline Experiment Control): reviewing changes, creating widgets and plots, writing scans and device configs.",
+  "description": "Agent skills for BEC (Beamline Experiment Control): reviewing changes, auditing widget safety, creating widgets and plots, writing scans and device configs.",
   "version": "0.1.0",
   "author": {
     "name": "Jan Wyzula",

@@ -74,6 +74,8 @@ SHARED_COPIES = [
      "bec-focused-review/references/proof-branch.md"),
     ("bec-new-widget/references/repo-context.md",
      "bec-new-plot-widget/references/repo-context.md"),
+    ("bec-new-widget/references/lifecycle.md",
+     "bec-widget-safety-audit/references/lifecycle.md"),
 ]
 
 
