@@ -28,11 +28,16 @@ def deleteLater(self):                # programmatic deletion without a close ev
     if not self._destroyed: self._destroyed = True; self.cleanup()
     super().deleteLater()
 
-self.destroyed.connect(partial(_forget_destroyed_widget, self.gui_id))   # parent destroyed
+self.destroyed.connect(partial(_forget_destroyed_widget, self.gui_id))   # destroyed without either
 ```
 
-The third path cannot call `cleanup()` (the Python wrapper is already gone); it only removes the
-RPC entry and prunes dead dispatcher slots. Consequences: put teardown in `cleanup()`, not in
+(Simplified: the real `closeEvent` calls `super().closeEvent()` in a `finally`, and `deleteLater`
+logs a failing `cleanup()` and deletes anyway, so an exception in `cleanup()` never blocks closing.)
+
+The `deleteLater` override only sees calls made from Python; Qt-internal deletions (a plain Qt
+parent deleting its children, C++ `deleteLater`) skip it and reach only the third path. That path
+cannot call `cleanup()` (the Python wrapper is already gone); it only removes the RPC entry and
+prunes dead dispatcher slots. Consequences: put teardown in `cleanup()`, not in
 `closeEvent`/`__del__`; make `cleanup()` idempotent; give widgets a `BECWidget` parent or close them
 explicitly.
 

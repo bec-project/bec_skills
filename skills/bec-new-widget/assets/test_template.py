@@ -38,7 +38,9 @@ def test_precision_property_is_applied(widget):
 def test_set_device_swaps_subscription(widget, monkeypatch):
     calls = []
     monkeypatch.setattr(
-        widget.bec_dispatcher, "disconnect_slot", lambda slot, topics, cb_info=None: calls.append(topics)
+        widget.bec_dispatcher,
+        "disconnect_slot",
+        lambda slot, topics, cb_info=None: calls.append(topics),
     )
     widget.set_device("samy")
     assert widget.config.device == "samy"

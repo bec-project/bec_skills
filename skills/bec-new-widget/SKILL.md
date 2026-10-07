@@ -41,6 +41,10 @@ Check first whether a widget with the same purpose already exists (`bec_widgets/
 
 ## 2. Class skeleton rules
 
+Start from [assets/widget_template.py](assets/widget_template.py): a complete widget with a
+dispatcher subscription that can be re-targeted, a `submit_task` move, a `SafeProperty`, a timer
+and the minimal `cleanup()`. Its test counterpart is [assets/test_template.py](assets/test_template.py).
+
 ```python
 from qtpy.QtWidgets import QWidget
 from bec_lib.endpoints import MessageEndpoints
@@ -90,13 +94,13 @@ class MyWidget(BECWidget, QWidget):          # BECWidget FIRST, then exactly one
 ## 4. Cleanup - the part reviewers look at first
 
 `BECWidget.cleanup()` already disconnects all dispatcher subscriptions owned by the widget,
-removes the RPC registration and closes child `BECWidget`s. Override it only for what you own,
-and always end with `super().cleanup()`:
+removes the RPC registration and closes child `BECWidget`s. A widget with no timers, threads or
+external callbacks needs no `cleanup()` override. Otherwise override it only for what you own, and
+always end with `super().cleanup()`:
 
 ```python
 def cleanup(self):
-    self._poll_timer.stop()                  # every QTimer you started
-    self._poll_timer.deleteLater()
+    self._poll_timer.stop()                  # every running QTimer (parented ones die with the widget)
     self._worker_thread.quit(); self._worker_thread.wait(3000)   # every QThread
     self.dev[self.device].readback.unsubscribe(self._sub_id)     # ophyd/bec_lib callbacks
     super().cleanup()
