@@ -53,25 +53,30 @@ Severity guide: **crash** (SIGSEGV/SIGBUS, abort) > **callback into a dead or cl
 - **Prove**: close (or delete the target, e.g. remove a dock) right after the call is scheduled,
   wait longer than the delay, and assert the callback did not run / no `already deleted` error.
   `SafeSlot` swallows the exception, so assert on a recorded call or on logged errors.
-- **Fix**: `QTimer.singleShot(ms, self, callback)` drops the call when `self` is *deleted*, but a
-  closed widget is not deleted yet: either check `self._destroyed` first thing in the callback, or
-  use a single-shot `QTimer(self)` stored on the widget and stopped in `cleanup()`. For objects you
-  do not own (a splitter, a dock), check `shiboken6.isValid(obj)` before touching them. Bound
-  retry loops with a counter.
+- **Fix**: `self._call_later(ms, callback)` on any `BECWidget` (bec_widgets >= 3.39.1): bound to
+  the widget, dropped when it is deleted and skipped once it is closed. On older versions note
+  that `QTimer.singleShot(ms, self, callback)` only drops the call when `self` is *deleted* - a
+  closed widget is not deleted yet - so check `self._destroyed` first thing in the callback, or use
+  a single-shot `QTimer(self)` stored on the widget and stopped in `cleanup()`. For objects you do
+  not own (a splitter, a dock), check `shiboken6.isValid(obj)` before touching them. Bound retry
+  loops with a counter.
 
 ## C5. Signal proxies keep delivering after close
 
 - **Where**: `pg.SignalProxy` / `BECSignalProxy` attributes. `SignalProxy.disconnect()` only sets
   `blockSignal`; with an emission queued, its delivery timer keeps ticking (`flush()` returns early
-  and never stops it) and the queued `args` survive. `BECSignalProxy.cleanup()` stops only its own
-  watchdog timer. pyqtgraph creates its timers outside `qtpy`, so the autouse timer check cannot
-  see them.
+  and never stops it) and the queued `args` survive. Before bec_widgets 3.39.1,
+  `BECSignalProxy.cleanup()` stopped only its own watchdog timer. pyqtgraph creates its timers
+  outside `qtpy`, so the autouse timer check cannot see them.
 - **Prove**: `test_close_stops_timers_and_signal_proxies` (state left behind) and
   `test_no_queued_update_runs_after_close` (slot ran after close) - list every signal that feeds a
   proxy in `PENDING_UPDATES`.
-- **Fix** in `cleanup()`, for each proxy: `proxy.disconnect()`, `proxy.timer.stop()`,
-  `proxy.args = None` (plus `proxy.cleanup()` for a `BECSignalProxy`), before
-  `super().cleanup()`.
+- **Fix** in `cleanup()`, before `super().cleanup()`: `cleanup_signal_proxy(proxy)` from
+  `bec_widgets.utils.bec_signal_proxy` for each `pg.SignalProxy`, `proxy.cleanup()` for each
+  `BECSignalProxy` (both complete since 3.39.1). On older versions:
+  `pg.SignalProxy.disconnect(proxy)`, `proxy.timer.stop()`, `proxy.args = None` - call the class
+  method explicitly, because on a `SignalProxy` subclass PySide6 resolves `proxy.disconnect` to
+  `QObject.disconnect`.
 
 ## C6. Dispatcher subscriptions
 

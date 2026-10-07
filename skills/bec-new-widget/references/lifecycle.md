@@ -10,7 +10,10 @@ Sources: `bec_widgets/utils/bec_widget.py`, `bec_widgets/utils/bec_connector.py`
 `self.config` (`ConnectionConfig`), `self.gui_id`, `self.object_name`, `self.error_utility`,
 `self._thread_pool = QThreadPool.globalInstance()`, `self._workers`. `BECWidget.__init__` adds the
 busy overlay, connects the theme signal through a weak `SafeConnect`, and hooks
-`self.destroyed` to a registry purge keyed by `gui_id`.
+`self.destroyed` to a registry purge keyed by `gui_id`. Since bec_widgets 3.39.1 it also offers
+`self._call_later(msec, callback)`: a single-shot timer bound to the widget that is dropped when the
+widget is deleted and skipped once it is closed - use it for every deferred call that touches the
+widget instead of a bare `QTimer.singleShot`.
 
 Constructor kwargs: `client`, `config`, `gui_id`, `object_name` (sanitised, unique among siblings),
 `root_widget` (top-level in the RPC namespace), `rpc_exposed` (False keeps it out of the registry),
@@ -54,7 +57,9 @@ explicitly.
 | `QTimer` you created | `.stop()`; `.timeout.disconnect(...)` if connected to a lambda; `.deleteLater()` |
 | `QThread` / `QObject` moved to a thread | disconnect signals, `worker.deleteLater()`, `thread.quit()`, `thread.wait(3000)` with an error log on timeout |
 | `submit_task` workers | nothing - the base keeps `self._workers` and detaches on completion; just never touch widgets inside the task |
-| `pg.SignalProxy`, `BECSignalProxy` | `.cleanup()` / `.disconnect()` |
+| `pg.SignalProxy` | `cleanup_signal_proxy(proxy)` from `bec_widgets.utils.bec_signal_proxy` (>= 3.39.1); older: `pg.SignalProxy.disconnect(proxy)`, `proxy.timer.stop()`, `proxy.args = None` - `disconnect()` alone leaves a queued emission ticking |
+| `BECSignalProxy` | `.cleanup()` (complete since 3.39.1) |
+| deferred calls (`QTimer.singleShot`) | nothing if scheduled with `self._call_later`; a bare `singleShot` fires into the closed widget |
 | ophyd / bec_lib callbacks (`device.readback.subscribe`, `client.callbacks.register`) | `unsubscribe(id)` / `remove(id)` |
 | dispatcher slots registered with a lambda/partial | pass `owner=self` at `connect_slot` time; then the base releases them |
 | dialogs, popups, context menus you created | `.close()`, `.deleteLater()`, set attribute to `None` |

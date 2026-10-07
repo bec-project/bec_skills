@@ -98,7 +98,9 @@ Details and the settings-dialog pattern: [references/toolbar-and-settings.md](re
 - Dispatcher slots only *emit* a plain signal; the throttled proxy calls the real update
   (`pg.SignalProxy(..., rateLimit=25)`; 5 for expensive 2D work; `BECSignalProxy` when the update
   triggers a slow request such as DAP). On `scan_progress` `done`, schedule two late updates
-  (`QTimer.singleShot(100, ...)`, `QTimer.singleShot(300, ...)`) to catch trailing data.
+  with `self._call_later(100, self.update_plot)` and `self._call_later(300, ...)` to catch trailing
+  data. `_call_later` (bec_widgets >= 3.39.1) skips the call once the widget is closed; a bare
+  `QTimer.singleShot` still fires into a closed widget.
 - Scan data: `self.scan_item = self.queue.scan_storage.find_scan_by_ID(scan_id)`; read
   `scan_item.live_data[device][signal].val`. Async devices: subscribe to
   `MessageEndpoints.device_async_signal(scan_id, device, signal)` with `from_start=True`,
@@ -145,12 +147,21 @@ set the attribute to `None` and uncheck the toolbar action.
 
 ```python
 def cleanup(self):
-    self.proxy_update.disconnect()                 # or .cleanup() for BECSignalProxy
+    cleanup_signal_proxy(self.proxy_update)        # pg.SignalProxy; BECSignalProxy: .cleanup()
     self._finish_worker_thread()                   # quit() + wait(3000)
     for dlg in (self.settings_dialog,): dlg and dlg.reject()
     self.clear_all()                               # removeItem + remove_rpc for every item
     super().cleanup()                              # toolbar, crosshair, fps, menus, dispatcher, RPC
 ```
+
+`cleanup_signal_proxy` (`bec_widgets.utils.bec_signal_proxy`, >= 3.39.1) also stops the proxy's
+delivery timer and drops a queued emission; `proxy.disconnect()` alone leaves it ticking and the
+slot runs once more after close. On older bec_widgets: `pg.SignalProxy.disconnect(proxy)`,
+`proxy.timer.stop()`, `proxy.args = None`.
+
+PlotBase's context menus are top-level windows that only `cleanup()` closes: a plot deleted
+through a plain Qt parent (no close event, so no `cleanup()`) leaves about a dozen menus behind.
+Give plots a `BECWidget` parent or close them before deleting their container.
 
 pyqtgraph specifics: never `plot_item.clear()` (kills crosshair/indicator items - filter by
 `is_crosshair`); the base closes `vb.menu`/`ctrlMenu` for you; undo anything you attached to
@@ -188,6 +199,7 @@ The autouse fixtures fail on leaked timers/widgets/threads. Reference images are
 - [ ] `class X(PlotBase)`, same ctor signature incl. `popups`, `USER_ACCESS = [*PlotBase.USER_ACCESS, ...]`
 - [ ] toolbar via `components.add_safe` + bundles, actions parented, `show_bundles` order set
 - [ ] dispatcher slot → signal → `SignalProxy` → update; scan-scoped endpoints swapped per scan
+- [ ] deferred updates through `self._call_later`, proxies released with `cleanup_signal_proxy`
 - [ ] `setData`-based updates, numpy only, clipToView/downsampling for large data
 - [ ] settings in side panel and popup; `apply_theme` and `add_side_menus` call `super()`
 - [ ] `cleanup()` stops proxies/threads/dialogs, clears items, ends with `super().cleanup()`

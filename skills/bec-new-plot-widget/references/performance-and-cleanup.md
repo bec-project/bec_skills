@@ -17,13 +17,19 @@ Dispatcher slot bodies stay tiny:
 def on_scan_progress(self, msg, meta):
     self.sync_signal_update.emit()
     if msg.get("done"):
-        QTimer.singleShot(100, self.update_plot)
-        QTimer.singleShot(300, self.update_plot)
+        self._call_later(100, self.update_plot)  # skipped once the widget is closed
+        self._call_later(300, self.update_plot)
 ```
+
+`BECWidget._call_later(msec, callback)` (bec_widgets >= 3.39.1) is a `QTimer.singleShot` bound to
+the widget that also checks `_destroyed`, so a late update never runs into a closed widget. Do not
+use a bare `QTimer.singleShot` for work that touches the widget.
 
 `BECSignalProxy` (`bec_widgets/utils/bec_signal_proxy.py`): emits once, then blocks and stores
 the newest args; `unblock_proxy()` replays only if the args changed; a `timeout` timer unblocks a
-lost response. Call its `cleanup()` first in the widget `cleanup()`.
+lost response. Call its `cleanup()` first in the widget `cleanup()`. Release every plain
+`pg.SignalProxy` with `cleanup_signal_proxy(proxy)` from the same module (both >= 3.39.1; see the
+skill's cleanup section for older versions).
 
 ## Update in place
 

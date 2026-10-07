@@ -89,6 +89,9 @@ class MyWidget(BECWidget, QWidget):          # BECWidget FIRST, then exactly one
 - Never block the GUI thread: device moves and RPC calls go through `self.submit_task(fn, *args, on_complete=..., on_failed=...)`
   (global `QThreadPool`); pass `on_failed` in the call, not afterwards. Never touch widgets from the
   worker - deliver results via the completion slot.
+- Deferred work that touches the widget: `self._call_later(msec, callback)` (bec_widgets >= 3.39.1),
+  which is skipped once the widget is closed; never a bare `QTimer.singleShot` (it still fires
+  into a closed widget). On older versions use a single-shot `QTimer(self)` stopped in `cleanup()`.
 - Device access: `self.dev[name]`, `self.dev[name].limits`, `self.scans.<scan>(...)`, `self.queue`.
 
 ## 4. Cleanup - the part reviewers look at first
