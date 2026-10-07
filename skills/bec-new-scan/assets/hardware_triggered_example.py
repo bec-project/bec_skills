@@ -13,6 +13,7 @@ from typing import Annotated
 
 from bec_lib.device import DeviceBase
 from bec_lib.scan_args import ScanArgument, Units
+from bec_server.scan_server.errors import ScanAbortion
 from bec_server.scan_server.scans.scan_base import ScanBase, ScanType
 from bec_server.scan_server.scans.scan_modifier import scan_hook
 
@@ -81,7 +82,10 @@ class MyDaqScan(ScanBase):
         kickoff_status = self.actions.kickoff(
             device=self.daq, parameters={"duration": self.scan_duration}, wait=False
         )
-        kickoff_status.wait(timeout=5)
+        # wait() raises TimeoutError up to bec 4.1.4 and returns False from bec#1118 on; this
+        # check stops the scan with both instead of running on without a started DAQ.
+        if not kickoff_status.wait(timeout=5):
+            raise ScanAbortion(f"Kickoff of {self.daq} did not finish within 5 s.")
         complete_status = self.actions.complete(device=self.daq, wait=False)
         # Poll instead of sleeping the full duration so abort/halt stay responsive.
         while not complete_status.done:

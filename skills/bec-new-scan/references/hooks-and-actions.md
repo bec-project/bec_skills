@@ -2,7 +2,7 @@
 
 Source files (bec repo): `bec_server/bec_server/scan_server/scans/scan_base.py`,
 `scan_actions.py`, `scan_components.py`, `scan_modifier.py`, `position_generators.py`,
-`bec_server/bec_server/scan_server/direct_scan_worker.py`, `scan_stubs.py` (`ScanStubStatus`).
+`scan_status.py` (`ScanStatus`), `bec_server/bec_server/scan_server/direct_scan_worker.py`.
 
 ## Execution order (DirectScanWorker)
 
@@ -36,7 +36,7 @@ settling_time=, settling_time_after_trigger=, burst_at_each_point=, relative=,
 run_on_exception_hook=, scan_report_devices=, monitored=, on_request=, **kwargs)` - unknown
 kwargs go to `scan_info.additional_scan_parameters` and end up in the file metadata.
 
-## ScanActions (`self.actions`) - plain calls returning `ScanStubStatus`
+## ScanActions (`self.actions`) - plain calls returning `ScanStatus`
 
 All take `wait=True` by default; pass `wait=False` to get a status you resolve later.
 
@@ -78,7 +78,9 @@ worker starts the scan - i.e. from `__init__`.
 - `check_limits(motors, positions)` - raises `LimitError`.
 
 Beamline plugins may subclass `ScanComponents` (`<plugin>/scans/scan_customization/`); the
-generator wires `self.components = <PluginComponents>(self)` automatically.
+generator wires `self.components = <PluginComponents>(self)` automatically. `ScanBase` itself
+always creates a plain `ScanComponents`, so a hand-written plugin scan that needs the plugin's
+components sets `self.components = <PluginComponents>(self)` right after `super().__init__()`.
 
 ## Position generators (`bec_server.scan_server.scans.position_generators`)
 
@@ -88,23 +90,43 @@ generator wires `self.components = <PluginComponents>(self)` automatically.
 `multi_region_line_positions(...)`, `multi_region_grid_positions(...)`, `Direction` enum.
 All return `np.ndarray` shaped `(num_points, num_motors)`.
 
-## ScanStubStatus
+## ScanStatus
 
-`.wait(min_wait=None, timeout=np.inf)` (raises `TimeoutError` / `DeviceInstructionError`),
-`.done` (property; reading it marks the status as checked), `.result`. Container statuses
-aggregate sub-statuses (e.g. `stage_all_devices`). A status that is never waited on or checked is
-reported by `check_for_unchecked_statuses()`.
+`bec_server/scan_server/scans/scan_status.py` (called `ScanStubStatus` in `scan_stubs.py` before bec 4).
+
+`.wait(min_wait=None, timeout=np.inf)` raises `DeviceInstructionError` when the device call
+failed. On timeout it raises `TimeoutError` up to bec 4.1.4; bec#1118 changes it to return `False`
+(and `True` on success). Code that must stop on a timeout works with both:
+
+```python
+if not status.wait(timeout=5):          # bec#1118: False on timeout
+    raise ScanAbortion("kickoff of the DAQ timed out")   # bec_server.scan_server.errors
+```
+
+`.done` (property; reading it marks the status as checked; `True` once an abort was requested),
+`.result`. Container statuses aggregate sub-statuses (e.g. `stage_all_devices`). A status that is
+never waited on or checked is reported by `check_for_unchecked_statuses()`.
 
 ## Scan modifiers
 
 `@scan_hook` wraps each hook so the single `ScanModifier` plugin of the beamline
-(entry point `bec.scans.scan_modifier`) can register `@scan_hook_impl("<hook>", "before"|"after"|"replace")`
-methods. Keep your hooks small and delegate to helpers so a modifier can replace one hook without
+(entry point `bec.scans.scan_modifier`, usually
+`<plugin>/scans/scan_customization/scan_modifier.py`) can register
+`@scan_hook_impl("<hook>", "before"|"after"|"replace", scan_names=[...])` methods; `scan_names`
+(shell-style patterns such as `"*_line_scan"`) limits a method to some scans, default is every
+scan, core and plugin. Inside a modifier, `self.scan`, `self.dev`, `self.actions`,
+`self.components` and `self.scan_info` are the running scan's; `self.call_original("<hook>", ...)`
+runs the scan's own hook from a `"replace"`; `self.device_is_available(...)` guards beamline
+devices. `scan_signature_overrides(scan_name, arguments, defaults)` changes defaults or adds
+arguments (extra ones land in `additional_scan_parameters`). This is the plugin-side way to change
+a core scan for one beamline.
+
+Keep your hooks small and delegate to helpers so a modifier can replace one hook without
 re-implementing your whole scan.
 
 ## Porting a legacy generator scan
 
-| legacy (`legacy_scans.py`, `ScanStubs`) | v4 |
+| legacy (`legacy_scans.py` / `ScanStubs`, removed in bec 4) | v4 |
 |---|---|
 | `class X(ScanBase)` from `legacy_scans` / `SyncFlyScanBase` / `AsyncFlyScanBase` | `class X(ScanBase)` from `scans.scan_base`; fly = `ScanType.HARDWARE_TRIGGERED` |
 | `scan_type = "step"` / `"fly"` | `ScanType.SOFTWARE_TRIGGERED` / `HARDWARE_TRIGGERED` |
@@ -121,3 +143,5 @@ re-implementing your whole scan.
 | `yield from self.stubs.send_rpc_and_wait(device, method, ...)` | `self.actions.rpc_call(device, method, ...)` |
 | `self.stubs.scan_report_instruction({...})` | `self.actions.add_scan_report_instruction_*` |
 | `self.metadata[...]`, `self.num_pos`, `self.exp_time` class attrs | `self.update_scan_info(...)` / `self.scan_info.*` |
+| `ScanStubStatus` (`scan_stubs.py`) | `ScanStatus` (`scans/scan_status.py`) |
+| `v4_scan_assembler` test fixture (deprecated alias since bec 4.0) | `scan_assembler` |
