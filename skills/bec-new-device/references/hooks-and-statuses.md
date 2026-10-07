@@ -60,13 +60,25 @@ scan hooks),
 | `TransitionStatus(signal, transitions=[...], *, strict=True, failure_states=None, timeout=None, description=None)` | finishes when the signal walks through the states in order (`strict=False` allows skipping) |
 | `SubscriptionStatus(obj, callback, event_type=None, timeout=None, settle_time=None, run=True, description=None)` | arbitrary predicate on subscription callbacks |
 | `ExceptionStatus(CompareStatus)` | comparison that raises a custom exception |
-| `AndStatus(a, b)` | both |
-| `TaskStatus` (from `task_handler.submit_task(fn, task_args=(), task_kwargs={}, run=True)`) | thread-backed; `.state` in `TaskState` (`not_started/running/timeout/error/completed/killed`); `task_handler.kill_task(status)`, `shutdown()` |
+| `AndStatus(a, b)` / `a & b` | finishes when both finish, fails with the first failure. Keep a PSI status leftmost: `ophyd_status & psi_status` builds ophyd's `AndStatus` without the PSI diagnostics. No OR status exists; use `failure_value` / `failure_states` for alternative outcomes |
+| `TaskStatus` (from `task_handler.submit_task(fn, task_args=(), task_kwargs={}, run=True)`) | thread-backed, for work with no PV to subscribe to (socket or vendor-SDK polling), not for EPICS devices; `.state` in `TaskState` (`not_started/running/timeout/error/completed/killed`); `task_handler.kill_task(status)`, `shutdown()`. `destroy()` kills running tasks, `stop()` only if `on_stop()` calls `shutdown()` |
 | `MoveStatus`, `Status`, `StatusBase` | re-exports of ophyd with descriptions |
 
 All PSI statuses accept `description=`; a timeout reports it together with the line where the
 status was created (`StatusTimeoutErrorWithErrorInfo`), which is what the operator sees in the
 alarm - write descriptions like `"waiting for Eiger to arm"`.
+
+Composing writes and readiness in a scan hook (EPICS: the subscriptions complete the statuses,
+no task handler, nothing blocks):
+
+```python
+config = AndStatus(self.num_images.set(n_frames), self.exp_time.set(exp_time))  # set(), not put()
+self.arm_cmd.put(1)                       # command; its effect is confirmed by the state below
+status = CompareStatus(self.state, DetectorState.ARMED, failure_value=DetectorState.ERROR,
+                       timeout=self._timeout, description=f"{self.name}: arming") & config
+self.cancel_on_stop(status)
+return status
+```
 
 Pattern with retry in `on_connected` (from a real DAQ device; blocking is acceptable there,
 not in the scan hooks):

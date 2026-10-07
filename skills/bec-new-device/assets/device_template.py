@@ -26,6 +26,7 @@ from ophyd_devices.utils.bec_signals import (
     ProgressSignal,
 )
 from ophyd_devices.utils.psi_device_base_utils import (
+    AndStatus,
     CompareStatus,
     DeviceStatus,
     StatusBase,
@@ -55,7 +56,13 @@ class TriggerMode(int, enum.Enum):
 
 
 class MyDetectorControl(Device):
-    """<Vendor/model> detector control interface: IOC PVs and acquisition commands."""
+    """<Vendor/model> detector control interface: IOC PVs and acquisition commands.
+
+    Settings are written with ``set()`` and the statuses are returned, so the hooks can wait for
+    them without blocking. Commands (arm, start, stop) are plain ``put()`` calls: the hooks confirm
+    their effect with a status on the state PV. Whether a write may go unconfirmed is device
+    specific - check the IOC before turning a ``set()`` into a ``put()``.
+    """
 
     state = Cpt(EpicsSignalRO, "STATE", auto_monitor=True, kind="omitted")
     acquire = Cpt(EpicsSignal, "ACQUIRE", kind="omitted")
@@ -66,14 +73,17 @@ class MyDetectorControl(Device):
     frame_counter = Cpt(EpicsSignalRO, "FRAMECOUNT", auto_monitor=True, kind="normal")
     spectrum = Cpt(EpicsSignalRO, "SPECTRUM", kind="omitted")
 
-    def configure_acquisition(self, num_images: int, exp_time: float) -> None:
-        """Write the acquisition parameters without waiting for the IOC."""
-        self.num_images.put(num_images)
-        self.exp_time.put(exp_time)
+    def configure_acquisition(self, num_images: int, exp_time: float) -> AndStatus:
+        """Write the acquisition parameters; the status finishes when the IOC has taken both."""
+        return AndStatus(
+            self.num_images.set(num_images),
+            self.exp_time.set(exp_time),
+            description=f"{self.name}: configure acquisition",
+        )
 
-    def set_trigger_mode(self, mode: TriggerMode) -> None:
+    def set_trigger_mode(self, mode: TriggerMode) -> StatusBase:
         """Select the trigger source used by the next acquisition."""
-        self.trigger_mode.put(int(mode))
+        return self.trigger_mode.set(int(mode))
 
     def arm(self) -> None:
         """Arm the detector so it accepts triggers."""
@@ -156,7 +166,7 @@ class MyDetector(PSIDeviceBase, MyDetectorControl):
         """
         msg = self.scan_info.msg
         self._expected_frames = msg.num_points * msg.scan_parameters.get("frames_per_trigger", 1)
-        self.configure_acquisition(
+        config = self.configure_acquisition(
             num_images=self._expected_frames, exp_time=msg.scan_parameters.get("exp_time", 0.1)
         )
         self._file_path = self.file_utils.get_full_path(scan_status_msg=msg, name=self.name)
@@ -166,14 +176,16 @@ class MyDetector(PSIDeviceBase, MyDetectorControl):
             successful=False,
             hinted_h5_entries={"data": "/entry/data/data"},
         )
+        # If this IOC must have the configuration before arming, arm from config.add_callback(...).
         self.arm()
-        status = CompareStatus(
+        armed = CompareStatus(
             self.state,
             DetectorState.ARMED,
             failure_value=DetectorState.ERROR,
             timeout=self._timeout,
             description=f"{self.name}: arming",
         )
+        status = armed & config  # PSI status leftmost keeps the PSI AndStatus and its diagnostics
         self.cancel_on_stop(status)
         return status
 
@@ -225,8 +237,8 @@ class MyDetector(PSIDeviceBase, MyDetectorControl):
 
     def on_stop(self) -> None:
         """Called when the device is stopped."""
+        # EPICS device: statuses come from PV subscriptions, no task_handler tasks to kill.
         self.stop_acquisition()
-        self.task_handler.shutdown()
 
     def on_destroy(self) -> None:
         """Called when the device is destroyed. Cleanup resources here."""
