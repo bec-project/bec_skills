@@ -126,18 +126,23 @@ Rules that follow from how the server works:
 
 ## 4. Arguments, GUI and docs
 
-Type every argument with `Annotated[T, ScanArgument(display_name=..., gt/ge/lt/le=..., units=...,
-reference_units="device")]` or the shared aliases `DefaultArgType.Relative`, `.ExposureTime`,
+Type every argument with `Annotated[T, ScanArgument(display_name=..., description=...,
+gt/ge/lt/le=..., units=..., reference_units="device")]` or the shared aliases `DefaultArgType.Relative`, `.ExposureTime`,
 `.FramesPerTrigger`, `.SettlingTime`, `.SettlingTimeAfterTrigger`, `.ReadoutTime`,
 `.BurstAtEachPoint`, `.Snaked`, `.OptimizeTrajectory`. Required arguments are keyword-only
 without a default (`*, relative: DefaultArgType.Relative`). `ScanInputValidator` enforces these
 on client and server, and the ScanControl widget builds its form from them. `gui_config`
 groups (`{"Movement Parameters": [...], "Acquisition Parameters": [...]}`) must list every keyword
 argument a GUI user has to set: ScanControl shows only the listed ones, and nothing checks the
-names, so a misspelt or forgotten entry silently drops that field from the form. Write the
-`__init__` docstring in Google style with an `Examples:` block - it
-becomes `scans.<name>.__doc__` in the IPython client. Details and the `*args` bundle mechanism:
-[references/arguments.md](references/arguments.md).
+names, so a misspelt or forgotten entry silently drops that field from the form. Wrap the
+parameter list in `# fmt: off` / `# fmt: on` (after `self`, before `**kwargs`) with one argument
+per line, as the templates do, so black does not explode the `Annotated[...]` types.
+
+`scans.<name>.__doc__` is generated from the signature, not copied from your docstring: only the
+summary before `Args:` and the `Returns:` section survive; the `Args:` lines come from each
+`ScanArgument.description` and the `Examples:` are generated. So every `ScanArgument` needs a
+`description`, and a hand-written `Examples:` block is pointless. Details and the `*args` bundle
+mechanism: [references/arguments.md](references/arguments.md).
 
 ## 5. Tests
 
@@ -186,6 +191,6 @@ the conftest already registers the fixtures (drop the fixture import).
 - [ ] no `yield`, no `self.stubs`, no legacy attributes (`required_kwargs`, `pre_move`,
       `return_to_start_after_abort`, `scan_report_hint`, `ScanArgType`)
 - [ ] every `wait=False` status awaited; motors elevated to `monitored` if step-scanned
-- [ ] typed arguments + `gui_config` + docstring with example
+- [ ] typed arguments with `description`s inside `# fmt: off`/`on` + `gui_config` + summary docstring
 - [ ] right repo (plugin scan, plugin `ScanModifier` or core), asked when unclear
 - [ ] exported in `scans/__init__.py`; tests with `scan_assembler` pass in random order

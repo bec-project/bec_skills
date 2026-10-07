@@ -50,12 +50,11 @@ class MyStepScan(ScanBase):
 
     def __init__(
         self,
-        device: DeviceBase,
-        start: Annotated[
-            float, ScanArgument(display_name="Start Position", reference_units="device")
-        ],
-        stop: Annotated[float, ScanArgument(display_name="Stop Position", reference_units="device")],
-        steps: Annotated[int, ScanArgument(display_name="Number of Steps", gt=0)],
+        # fmt: off
+        device: Annotated[DeviceBase, ScanArgument(display_name="Motor", description="Motor to scan.")],
+        start: Annotated[float, ScanArgument(display_name="Start Position", description="Start position.", reference_units="device")],
+        stop: Annotated[float, ScanArgument(display_name="Stop Position", description="Stop position.", reference_units="device")],
+        steps: Annotated[int, ScanArgument(display_name="Number of Steps", description="Number of points.", gt=0)],
         *,
         relative: DefaultArgType.Relative,
         exp_time: DefaultArgType.ExposureTime = 0,
@@ -64,10 +63,11 @@ class MyStepScan(ScanBase):
         settling_time_after_trigger: DefaultArgType.SettlingTimeAfterTrigger = 0,
         readout_time: DefaultArgType.ReadoutTime = 0,
         burst_at_each_point: DefaultArgType.BurstAtEachPoint = 1,
+        # fmt: on
         **kwargs,
     ):
         """
-        <Summary sentence shown in the client as scans.my_step_scan.__doc__.>
+        <Summary sentence: the client shows it at the top of scans.my_step_scan.__doc__.>
 
         Args:
             device (DeviceBase): motor to scan
@@ -84,9 +84,6 @@ class MyStepScan(ScanBase):
 
         Returns:
             ScanReport
-
-        Examples:
-            >>> scans.my_step_scan(dev.samx, -5, 5, 11, relative=False, exp_time=0.1)
         """
         super().__init__(**kwargs)
         self.device = device

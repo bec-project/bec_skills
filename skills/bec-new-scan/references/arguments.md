@@ -12,10 +12,11 @@ from bec_lib.scan_args import DefaultArgType, ScanArgument, Units
 
 def __init__(
     self,
-    device: DeviceBase,
-    start: Annotated[float, ScanArgument(display_name="Start Position", reference_units="device")],
-    stop: Annotated[float, ScanArgument(display_name="Stop Position", reference_units="device")],
-    steps: Annotated[int, ScanArgument(display_name="Number of Steps", gt=0)],
+    # fmt: off
+    device: Annotated[DeviceBase, ScanArgument(display_name="Motor", description="Motor to scan.")],
+    start: Annotated[float, ScanArgument(display_name="Start Position", description="Start position.", reference_units="device")],
+    stop: Annotated[float, ScanArgument(display_name="Stop Position", description="Stop position.", reference_units="device")],
+    steps: Annotated[int, ScanArgument(display_name="Number of Steps", description="Number of points.", gt=0)],
     *,
     relative: DefaultArgType.Relative,                 # required keyword-only: no default
     exp_time: DefaultArgType.ExposureTime = 0,
@@ -24,10 +25,16 @@ def __init__(
     settling_time_after_trigger: DefaultArgType.SettlingTimeAfterTrigger = 0,
     readout_time: DefaultArgType.ReadoutTime = 0,
     burst_at_each_point: DefaultArgType.BurstAtEachPoint = 1,
-    duration: Annotated[float, ScanArgument(display_name="Duration", units=Units.s, gt=0)] = 1.0,
+    duration: Annotated[float, ScanArgument(display_name="Duration", description="Acquisition duration.", units=Units.s, gt=0)] = 1.0,
+    # fmt: on
     **kwargs,
 ):
 ```
+
+Wrap the parameter list in `# fmt: off` / `# fmt: on` (after `self`, before `**kwargs`) and keep
+one argument per line, however long: black would otherwise split every `Annotated[...]` over
+several lines and make the signature unreadable. Beamline plugin scans do the same (e.g.
+`debye_bec/scans/xas_simple_scan.py`, `csaxs_bec/scans/flomni_fermat_scan.py`).
 
 `ScanArgument` fields: `display_name`, `description`, `tooltip`, `expert`, `hidden`, `example`,
 `units` (pint unit or string), `reference_units` (name of the argument whose units apply, e.g.
@@ -98,22 +105,21 @@ through `scan_signature_overrides()` is therefore usable from the client but not
 
 `scan_name` -> `scans.<scan_name>(*args, **kwargs, callback=None, async_callback=None,
 hide_report=False, metadata=None, monitored=None, on_request=None, file_suffix=None,
-file_directory=None, scan_queue=None)` returning a `ScanReport`. `__doc__` and `__signature__`
-come from your `__init__`, so the docstring must describe every argument and include an
-`Examples:` block:
+file_directory=None, scan_queue=None)` returning a `ScanReport`.
 
-```python
-"""
-One-line summary.
+The scan manager generates `scans.<scan_name>.__doc__` and `__signature__` from the signature
+(`scan_doc_with_modifiers()` in `scan_server/scans/scan_argument_modifier.py`), after any
+`ScanModifier` overrides. From your docstring only the text before `Args:` (the summary) and the
+`Returns:` / `Raises:` sections are kept; the class docstring wins over the `__init__` one when the
+class has its own. The `Args:` and `Examples:` sections are rebuilt:
 
-Args:
-    device (DeviceBase): motor to move
-    ...
+- each argument line is `name (type [units]): <ScanArgument.description>. Default: <value>`; without
+  a `description` it falls back to the argument name with spaces (`steps (int): steps.`), so give
+  every `ScanArgument` a `description` - the `DefaultArgType` aliases already have one;
+- `Examples:` is generated as a `Minimum:` call (required arguments only) and a `Full:` call, using
+  `ScanArgument.example` where set, otherwise a placeholder (`dev.<name>`, `1.0`, `10` for steps);
+  a hand-written `Examples:` block is dropped.
 
-Returns:
-    ScanReport
-
-Examples:
-    >>> scans.my_scan(dev.samx, -5, 5, steps=10, exp_time=0.1, relative=False)
-"""
-```
+So keep the `__init__` docstring to a summary sentence, `Args:` for readers of the code, and
+`Returns: ScanReport`, as the generator template does. Check the result with
+`scans.<scan_name>?` in the IPython client.
