@@ -48,7 +48,9 @@ class DeviceReadbackLabel(BECWidget, QWidget):
         self.get_bec_shortcuts()
 
         self._current_endpoint = None
-        self._stale_timer = QTimer(self)  # owned -> stopped in cleanup()
+        # Parented, so Qt deletes it with the widget. A running timer still has to be stopped in
+        # cleanup(): close() runs cleanup() and may come long before the actual deletion.
+        self._stale_timer = QTimer(self)
         self._stale_timer.setInterval(5000)
         self._stale_timer.timeout.connect(self._mark_stale)
 
@@ -69,6 +71,8 @@ class DeviceReadbackLabel(BECWidget, QWidget):
         """
         if device not in self.dev:
             raise ValueError(f"Device '{device}' is not in the current session.")
+        # Disconnect only to re-target; at teardown BECWidget.cleanup() releases every
+        # subscription whose owner is this widget (bound methods carry their owner).
         if self._current_endpoint is not None:
             self.bec_dispatcher.disconnect_slot(self.on_readback, self._current_endpoint)
         self.config.device = device
@@ -117,10 +121,11 @@ class DeviceReadbackLabel(BECWidget, QWidget):
         self.label.setStyleSheet(f"color: {colors.default.name()};")
 
     def cleanup(self) -> None:
+        # Only what BECWidget cannot know about. BECWidget.cleanup() already disconnects this
+        # widget's dispatcher slots, removes its RPC entry and closes child BECWidgets.
+        # Add here: running QTimers, QThreads (quit + wait), ophyd/bec_lib callbacks you subscribed.
+        # Without any of those, do not override cleanup() at all.
         self._stale_timer.stop()
-        self._stale_timer.timeout.disconnect(self._mark_stale)
-        self._stale_timer.deleteLater()
-        # dispatcher subscriptions of this owner are released by BECWidget.cleanup()
         super().cleanup()
 
 
