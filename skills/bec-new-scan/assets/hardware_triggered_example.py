@@ -25,12 +25,12 @@ class MyDaqScan(ScanBase):
 
     def __init__(
         self,
-        daq: DeviceBase,
-        scan_duration: Annotated[float, ScanArgument(display_name="Duration", units=Units.s, gt=0)],
+        # fmt: off
+        daq: Annotated[DeviceBase, ScanArgument(display_name="DAQ", description="Device implementing kickoff/complete.")],
+        scan_duration: Annotated[float, ScanArgument(display_name="Duration", description="Acquisition duration.", units=Units.s, gt=0)],
         *,
-        readout_cycle: Annotated[
-            float, ScanArgument(display_name="Monitored readout cycle", units=Units.s, gt=0)
-        ] = 0.5,
+        readout_cycle: Annotated[float, ScanArgument(display_name="Monitored readout cycle", description="Period of the monitored readouts.", units=Units.s, gt=0)] = 0.5,
+        # fmt: on
         **kwargs,
     ):
         """
@@ -43,9 +43,6 @@ class MyDaqScan(ScanBase):
 
         Returns:
             ScanReport
-
-        Examples:
-            >>> scans.my_daq_scan(dev.nidaq, 10, readout_cycle=0.2)
         """
         super().__init__(**kwargs)
         self.daq = daq
@@ -82,8 +79,6 @@ class MyDaqScan(ScanBase):
         kickoff_status = self.actions.kickoff(
             device=self.daq, parameters={"duration": self.scan_duration}, wait=False
         )
-        # wait() raises TimeoutError up to bec 4.1.4 and returns False from bec#1118 on; this
-        # check stops the scan with both instead of running on without a started DAQ.
         if not kickoff_status.wait(timeout=5):
             raise ScanAbortion(f"Kickoff of {self.daq} did not finish within 5 s.")
         complete_status = self.actions.complete(device=self.daq, wait=False)
