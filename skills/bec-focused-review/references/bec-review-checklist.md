@@ -10,6 +10,11 @@ line names a concrete defect class, where it hides, and how to confirm it.
   created by the widget must be stopped/disconnected there. Confirm by grepping the class for
   `QTimer(`, `QThread`, `SignalProxy`, `subscribe(`, `installEventFilter(` and matching them to
   `cleanup()`. A missing stop shows up in tests as `Failed to stop all timers` / `threads_check`.
+  Proxies need `cleanup_signal_proxy(proxy)` (or `BECSignalProxy.cleanup()`), not `disconnect()`
+  alone: a queued emission keeps the delivery timer ticking and the slot runs after close;
+  pyqtgraph's timers escape the test leak check.
+- **Deferred calls**: a bare `QTimer.singleShot(ms, ...)` that touches the widget fires after
+  close; use `self._call_later(ms, callback)` (bec_widgets >= 3.39.1).
 - **MRO / ctor**: `class X(BECWidget, QWidget)`; `parent` is the first parameter and passed as
   `parent=parent` in one `super().__init__` call; `theme_update`/`parent_dock` kwargs no longer exist.
 - **Slots**: any method connected to a signal or registered with the dispatcher without

@@ -6,9 +6,10 @@ import numpy as np
 import pyqtgraph as pg
 from bec_lib.endpoints import MessageEndpoints
 from bec_lib.logger import bec_logger
-from qtpy.QtCore import QTimer, Signal
+from qtpy.QtCore import Signal
 from qtpy.QtWidgets import QWidget
 
+from bec_widgets.utils.bec_signal_proxy import cleanup_signal_proxy
 from bec_widgets.utils.colors import Colors
 from bec_widgets.utils.error_popups import SafeProperty, SafeSlot
 from bec_widgets.utils.toolbars.actions import MaterialIconAction
@@ -30,7 +31,13 @@ class DeviceVsIndexPlot(PlotBase):
     sync_signal_update = Signal()
 
     def __init__(
-        self, parent: QWidget | None = None, config=None, client=None, gui_id=None, popups=True, **kwargs
+        self,
+        parent: QWidget | None = None,
+        config=None,
+        client=None,
+        gui_id=None,
+        popups=True,
+        **kwargs,
     ):
         super().__init__(
             parent=parent, config=config, client=client, gui_id=gui_id, popups=popups, **kwargs
@@ -87,7 +94,7 @@ class DeviceVsIndexPlot(PlotBase):
         self.plot_item.addItem(curve)
         self._curves[device] = curve
         self.sync_signal_update.emit()
-        QTimer.singleShot(150, self.auto_range)  # autorange once the item is painted
+        self._call_later(150, self.auto_range)  # autorange once painted; skipped after close
         return curve
 
     @SafeSlot()
@@ -129,8 +136,8 @@ class DeviceVsIndexPlot(PlotBase):
     def on_scan_progress(self, msg: dict, meta: dict) -> None:
         self.sync_signal_update.emit()
         if msg.get("done"):
-            QTimer.singleShot(100, self.update_plot)
-            QTimer.singleShot(300, self.update_plot)
+            self._call_later(100, self.update_plot)  # catch trailing data
+            self._call_later(300, self.update_plot)
 
     @SafeSlot()
     def update_plot(self) -> None:
@@ -160,7 +167,7 @@ class DeviceVsIndexPlot(PlotBase):
             curve.set_color(curve.config.color)  # re-resolve palette-dependent colours
 
     def cleanup(self) -> None:
-        self.proxy_update.disconnect()
+        cleanup_signal_proxy(self.proxy_update)  # stops a queued delivery too
         self.clear_all()
         super().cleanup()
 
