@@ -1,7 +1,7 @@
 # Scan arguments: typing, validation, GUI grouping, *args bundles
 
 Source: `bec_lib/bec_lib/scan_args.py` (`ScanArgument`, `DefaultArgType`, `Units`),
-`bec_lib/bec_lib/scan_input_validator.py`, `bec_server/scan_server/scan_gui_models.py`.
+`bec_lib/bec_lib/scan_input_validator.py`, `bec_server/scan_server/scan_manager.py` (`available_scans`).
 
 ## Typed parameters
 
@@ -40,7 +40,7 @@ acquisition parameters; use them instead of re-declaring `exp_time` etc. The `Sc
 fields with the same names are filled via `self.update_scan_info(...)`.
 
 Validation runs twice: client-side in `Scans.prepare_scan_request` (immediate feedback in the
-IPython client) and server-side in `ScanAssembler.assemble_direct_scan`. The validator also
+IPython client) and server-side in `ScanAssembler.assemble_scan`. The validator also
 applies defaults, so `self.exp_time` is never `None` when a default exists.
 
 ## Variable-length device bundles (`*args`)
@@ -75,9 +75,24 @@ gui_config = {
 }
 ```
 
-Group label -> list of argument names. Validated by `GUIConfig.from_dict`; every listed name must
-be a parameter. The ScanControl widget renders groups in this order; arguments not listed still
-appear but ungrouped. `arg_input` bundles are rendered separately as repeatable rows.
+Group label -> list of argument names. The scan manager publishes it as `gui_visibility` in
+`available_scans` (a `gui_visibility` class attribute takes precedence over `gui_config`). Since
+bec 4.0 nothing validates it (the `GUIConfig` models in `scan_gui_models.py` were removed), so
+check the names yourself.
+
+The ScanControl widget (bec_widgets 3.x, `scan_info_adapter.py`) builds its keyword-argument form
+only from these groups, in this order:
+
+- a keyword argument that is not listed does not appear in the form at all;
+- a listed name that is not a parameter of `__init__` (a typo) is skipped without a warning;
+- `arg_input` names are skipped here; the bundles are rendered separately as repeatable rows, so
+  list only keyword arguments;
+- `ScanArgument(hidden=True)` arguments are skipped even when listed.
+
+So list every keyword argument a GUI user must be able to set, and check the result in
+ScanControl. `ScanModifier.gui_config_overrides()` exists, but bec up to 4.1.4 never applies it
+to the published groups, so it cannot add a field to ScanControl; an argument a modifier adds
+through `scan_signature_overrides()` is therefore usable from the client but not from the GUI.
 
 ## Client-side surface
 
