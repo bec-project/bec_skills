@@ -47,8 +47,12 @@ acquisition parameters; use them instead of re-declaring `exp_time` etc. The `Sc
 fields with the same names are filled via `self.update_scan_info(...)`.
 
 Validation runs twice: client-side in `Scans.prepare_scan_request` (immediate feedback in the
-IPython client) and server-side in `ScanAssembler.assemble_scan`. The validator also
-applies defaults, so `self.exp_time` is never `None` when a default exists.
+IPython client) and server-side in `ScanAssembler.assemble_scan`. The validator checks types
+and constraints and resolves device names to device objects; it does not fill in defaults. The
+assembler does that separately (`apply_scan_argument_defaults`, including defaults a
+`ScanModifier` overrides) before it constructs the scan, so `__init__` always receives a value for
+a defaulted argument. Nothing sets `self.exp_time` for you: store what you need yourself or read
+it back from `self.scan_info` after `update_scan_info(...)`, as the template does.
 
 ## Variable-length device bundles (`*args`)
 
@@ -65,8 +69,8 @@ arg_bundle_size = {"bundle": len(arg_input), "min": 1, "max": None}
 def __init__(self, *args, steps: ..., **kwargs):
     super().__init__(**kwargs)
     self.motor_input_bundles = bundle_args(args, bundle_size=self.arg_bundle_size["bundle"])
-    self.motors = list(self.motor_input_bundles.keys())        # device names
-    # values are (start, stop) tuples -> position_generators.line_scan_positions(list(values), steps=steps)
+    self.motors = list(self.motor_input_bundles.keys())        # device objects (resolved by the validator)
+    # values are [start, stop] lists -> position_generators.line_scan_positions(list(values), steps=steps)
 ```
 
 `bundle_args` comes from `scans.scan_base`. The client bundles positional arguments with
@@ -97,9 +101,11 @@ only from these groups, in this order:
 - `ScanArgument(hidden=True)` arguments are skipped even when listed.
 
 So list every keyword argument a GUI user must be able to set, and check the result in
-ScanControl. `ScanModifier.gui_config_overrides()` exists, but bec up to 4.1.4 never applies it
-to the published groups, so it cannot add a field to ScanControl; an argument a modifier adds
-through `scan_signature_overrides()` is therefore usable from the client but not from the GUI.
+ScanControl. ScanControl matches the group names against the published signature, which already
+includes arguments a `ScanModifier` adds through `scan_signature_overrides()`; such an argument
+shows up only if its name is in the scan's own `gui_config`. `ScanModifier.gui_config_overrides()`
+exists, but bec up to 4.1.4 never applies it to the published groups, so a modifier cannot add a
+field to a scan whose `gui_config` does not already name it.
 
 ## Client-side surface
 
@@ -109,16 +115,22 @@ file_directory=None, scan_queue=None)` returning a `ScanReport`.
 
 The scan manager generates `scans.<scan_name>.__doc__` and `__signature__` from the signature
 (`scan_doc_with_modifiers()` in `scan_server/scans/scan_argument_modifier.py`), after any
-`ScanModifier` overrides. From your docstring only the text before `Args:` (the summary) and the
-`Returns:` / `Raises:` sections are kept; the class docstring wins over the `__init__` one when the
-class has its own. The `Args:` and `Examples:` sections are rebuilt:
+`ScanModifier` overrides. It starts from the class docstring when the class has its own, otherwise
+the `__init__` one, and:
 
-- each argument line is `name (type [units]): <ScanArgument.description>. Default: <value>`; without
-  a `description` it falls back to the argument name with spaces (`steps (int): steps.`), so give
-  every `ScanArgument` a `description` - the `DefaultArgType` aliases already have one;
-- `Examples:` is generated as a `Minimum:` call (required arguments only) and a `Full:` call, using
-  `ScanArgument.example` where set, otherwise a placeholder (`dev.<name>`, `1.0`, `10` for steps);
-  a hand-written `Examples:` block is dropped.
+- if that docstring contains `Args:`, keeps the text before it and the `Returns:` / `Raises:`
+  sections, drops the rest of `Args:` and any `Examples:` section, and inserts a rebuilt `Args:`;
+- if it contains no `Args:`, keeps the whole docstring unchanged (a hand-written example in it
+  survives) and still appends the rebuilt `Args:` and `Examples:`;
+- rebuilt argument lines read `name (type [units]): <ScanArgument.description>. Default: <value>`;
+  without a `description` the argument name with spaces is used (`steps (int): steps.`), so give
+  every `ScanArgument` a `description` - the `DefaultArgType` aliases already have one. `arg_input`
+  bundles get one summary line (`*args (device: DeviceBase, start: float, stop: float): repeated
+  scan argument bundles.`), not a line per bundle entry, so describe them in the summary;
+- `Examples:` is generated as a `Minimum:` call (required arguments only) and a `Full:` call. Each
+  value is the argument's default when it has one; only arguments without a default use
+  `ScanArgument.example`, or a placeholder (`dev.<name>`, `1.0`, `10` for steps) when no example
+  is set.
 
 So keep the `__init__` docstring to a summary sentence, `Args:` for readers of the code, and
 `Returns: ScanReport`, as the generator template does. Check the result with

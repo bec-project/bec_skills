@@ -36,9 +36,15 @@ settling_time=, settling_time_after_trigger=, burst_at_each_point=, relative=,
 run_on_exception_hook=, scan_report_devices=, monitored=, on_request=, **kwargs)` - unknown
 kwargs go to `scan_info.additional_scan_parameters` and end up in the file metadata.
 
-## ScanActions (`self.actions`) - plain calls returning `ScanStatus`
+## ScanActions (`self.actions`) - plain calls, mostly returning `ScanStatus`
 
-All take `wait=True` by default; pass `wait=False` to get a status you resolve later.
+The device actions (stage, pre_scan, set, kickoff, complete, trigger, read, unstage) take
+`wait=True` by default and return a `ScanStatus`; pass `wait=False` to get one you resolve later.
+Exceptions: `read_manually(wait=True)` returns the readings (the status only with `wait=False`),
+`rpc_call` returns the method's result (a status only when the device method returns one), and the
+bookkeeping helpers (`open_scan`, `close_scan`, `add_scan_report_instruction_*`,
+`set_device_readout_priority`, `check_for_unchecked_statuses`, the lock and `send_client_info`
+helpers) take no `wait` and return no status.
 
 | method | notes |
 |---|---|
@@ -84,11 +90,14 @@ components sets `self.components = <PluginComponents>(self)` right after `super(
 
 ## Position generators (`bec_server.scan_server.scans.position_generators`)
 
-`line_scan_positions(bundles, steps)`, `nd_grid_positions(...)`, `fermat_spiral_pos(...)`,
-`spiral_positions(...)`, `log_scan_positions(...)`, `oscillating_positions(...)`,
-`round_scan_positions(...)`, `get_round_roi_scan_positions(...)`, `hex_grid_2d(...)`,
-`multi_region_line_positions(...)`, `multi_region_grid_positions(...)`, `Direction` enum.
-All return `np.ndarray` shaped `(num_points, num_motors)`.
+`line_scan_positions(axes, steps, endpoint=True)` with `axes` a list of `(start, stop)` pairs,
+`nd_grid_positions(...)`, `fermat_spiral_pos(...)`, `spiral_positions(...)`,
+`log_scan_positions(...)`, `round_scan_positions(...)`, `get_round_roi_scan_positions(...)`,
+`hex_grid_2d(...)`, `multi_region_line_positions(...)`, `multi_region_grid_positions(...)`,
+`Direction` enum. These return `np.ndarray` shaped `(num_points, num_motors)`. The exception is
+`oscillating_positions(values, repeat_turning_points=False)`: an endless iterator of scalars going
+back and forth over `values`, for open-ended scans that stop on a condition, not a position
+matrix.
 
 ## ScanStatus
 
@@ -128,9 +137,9 @@ re-implementing your whole scan.
 
 | legacy (`legacy_scans.py` / `ScanStubs`, removed in bec 4) | v4 |
 |---|---|
-| `class X(ScanBase)` from `legacy_scans` / `SyncFlyScanBase` / `AsyncFlyScanBase` | `class X(ScanBase)` from `scans.scan_base`; fly = `ScanType.HARDWARE_TRIGGERED` |
-| `scan_type = "step"` / `"fly"` | `ScanType.SOFTWARE_TRIGGERED` / `HARDWARE_TRIGGERED` |
-| `required_kwargs`, `ScanArgType.*` in `arg_input` | keyword-only params without default; real types / `Annotated[..., ScanArgument]` |
+| `class X(ScanBase)` from `legacy_scans` / `SyncFlyScanBase` / `AsyncFlyScanBase` | `class X(ScanBase)` from `scans.scan_base`; `scan_type` by who triggers, not by "fly" |
+| `scan_type = "step"` / `"fly"` | `SOFTWARE_TRIGGERED` when the scan triggers/reads each point (also software-managed fly scans such as core `ContLineScan`); `HARDWARE_TRIGGERED` when a kicked-off device runs the acquisition |
+| `required_kwargs`, `ScanArgType.*` in `arg_input` | params without default (positional or keyword-only); real types / `Annotated[..., ScanArgument]` |
 | `pre_move`, `return_to_start_after_abort`, `use_scan_progress_report`, `scan_report_hint` | explicit code: pre-move `set(wait=False)` in `prepare_scan`; move back in `post_scan`/`on_exception`; `add_scan_report_instruction_*` |
 | `initialize`, `read_scan_motors`, `_set_position_offset`, `prepare_positions`, `_calculate_positions`, `_check_limits`, `_optimize_trajectory` | all inside `prepare_scan` using `position_generators`, `components.get_start_positions`, `components.check_limits`, `components.optimize_trajectory` |
 | `run_baseline_reading` | `self.actions.read_baseline_devices(wait=False)` in `prepare_scan`, waited in `close_scan` |
