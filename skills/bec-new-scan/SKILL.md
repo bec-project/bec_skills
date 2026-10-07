@@ -9,7 +9,8 @@ metadata:
 # New BEC scan (v4)
 
 A v4 scan is a plain Python class deriving from `bec_server.scan_server.scans.scan_base.ScanBase`.
-The scan server calls ten hook methods in a fixed order and the scan drives devices *directly*
+A scan implements ten hook methods: the scan server runs eight of them in a fixed order, the
+scan calls `at_each_point` itself, and `on_exception` runs on failure. The scan drives devices *directly*
 through `self.actions` (`ScanActions`) and reusable building blocks in `self.components`
 (`ScanComponents`). There are no generators, no `yield from self.stubs...`, no
 `SyncFlyScanBase`/`AsyncFlyScanBase`: that legacy API (`legacy_scans.py`, `ScanStubs`) was removed
@@ -85,8 +86,11 @@ hardware-triggered variant in [assets/hardware_triggered_example.py](assets/hard
 ## 3. Implement all ten hooks
 
 The server runs `prepare_scan, open_scan, stage, pre_scan, scan_core, post_scan, unstage,
-close_scan` in this order and calls `on_exception(exc)` if anything raises; `at_each_point` is
-yours to call from `scan_core`. Every hook is `@abstractmethod` on `ScanBase`, so all ten must
+close_scan` in this order (`SCAN_SEQUENCE` in `direct_scan_worker.py`). `at_each_point` is not in
+that sequence: `scan_core` calls it (directly or through `components.step_scan`). `on_exception(exc)`
+runs when a hook raises, but only if the queue item still allows cleanup: a halt sets
+`run_on_exception_hook` to False and skips it, and so does a worker shutdown or a queue that was
+already stopped; otherwise the worker clears the abort event and calls it once. Every hook is `@abstractmethod` on `ScanBase`, so all ten must
 exist, each decorated with `@scan_hook` (this is what lets a beamline `ScanModifier` plugin run
 code before/after/instead of your hook). Responsibilities:
 
@@ -129,8 +133,10 @@ Rules that follow from how the server works:
 Type every argument with `Annotated[T, ScanArgument(display_name=..., description=...,
 gt/ge/lt/le=..., units=..., reference_units="device")]` or the shared aliases `DefaultArgType.Relative`, `.ExposureTime`,
 `.FramesPerTrigger`, `.SettlingTime`, `.SettlingTimeAfterTrigger`, `.ReadoutTime`,
-`.BurstAtEachPoint`, `.Snaked`, `.OptimizeTrajectory`. Required arguments are keyword-only
-without a default (`*, relative: DefaultArgType.Relative`). `ScanInputValidator` enforces these
+`.BurstAtEachPoint`, `.Snaked`, `.OptimizeTrajectory`. A required argument is one without a
+default; it can be positional (`device, start, stop, steps` in the template) or keyword-only after
+`*` (`*, relative: DefaultArgType.Relative`), which forces callers to name it.
+`ScanInputValidator` enforces these
 on client and server, and the ScanControl widget builds its form from them. `gui_config`
 groups (`{"Movement Parameters": [...], "Acquisition Parameters": [...]}`) must list every keyword
 argument a GUI user has to set: ScanControl shows only the listed ones, and nothing checks the
@@ -138,10 +144,11 @@ names, so a misspelt or forgotten entry silently drops that field from the form.
 parameter list in `# fmt: off` / `# fmt: on` (after `self`, before `**kwargs`) with one argument
 per line, as the templates do, so black does not explode the `Annotated[...]` types.
 
-`scans.<name>.__doc__` is generated from the signature, not copied from your docstring: only the
-summary before `Args:` and the `Returns:` section survive; the `Args:` lines come from each
-`ScanArgument.description` and the `Examples:` are generated. So every `ScanArgument` needs a
-`description`, and a hand-written `Examples:` block is pointless. Details and the `*args` bundle
+`scans.<name>.__doc__` is rebuilt from the signature rather than copied: when your docstring has
+an `Args:` section, the text before it plus its `Returns:` / `Raises:` sections are kept, the
+`Args:` lines come from each `ScanArgument.description`, and `Examples:` is generated (a
+hand-written one there is dropped). So give every `ScanArgument` a `description` and leave out a
+hand-written `Examples:` block; the exact rules and exceptions are in the reference. Details and the `*args` bundle
 mechanism: [references/arguments.md](references/arguments.md).
 
 ## 5. Tests
@@ -173,8 +180,10 @@ the conftest already registers the fixtures (drop the fixture import).
 
 ## 6. Wire it up and verify live
 
-1. Export: `from .<scan_name> import <ScanName>` in `scans/__init__.py` (the entry point
-   `bec.scans` must point at that package in `pyproject.toml`).
+1. Plugin repo: export `from .<scan_name> import <ScanName>` in `scans/__init__.py` (the entry
+   point `bec.scans` must point at that package in `pyproject.toml`); plugin discovery only sees
+   classes importable from that package. Core repo: no export - the scan server imports every
+   module in `bec_server/scan_server/scans/` itself.
 2. Reload a running scan server without restart: from the client
    `bec.connector.send(MessageEndpoints.service_request(), messages.ServiceRequestMessage(action="reload_scans"))`,
    or restart `bec-scan-server`. The scan then appears as `scans.<scan_name>` with signature and
@@ -193,4 +202,4 @@ the conftest already registers the fixtures (drop the fixture import).
 - [ ] every `wait=False` status awaited; motors elevated to `monitored` if step-scanned
 - [ ] typed arguments with `description`s inside `# fmt: off`/`on` + `gui_config` + summary docstring
 - [ ] right repo (plugin scan, plugin `ScanModifier` or core), asked when unclear
-- [ ] exported in `scans/__init__.py`; tests with `scan_assembler` pass in random order
+- [ ] plugin: exported in `scans/__init__.py`; tests with `scan_assembler` pass in random order
