@@ -4,12 +4,13 @@ from unittest import mock
 
 import numpy as np
 import pytest
+from ophyd.status import Status
 from ophyd.utils import WaitTimeoutError
 
 from ophyd_devices.interfaces.base_classes.psi_device_base import DeviceStoppedError
 from ophyd_devices.interfaces.protocols.bec_protocols import BECDeviceProtocol, BECFlyerProtocol
 from ophyd_devices.tests.utils import get_mock_scan_info, patched_device
-from ophyd_devices.utils.psi_device_base_utils import CompareStatus
+from ophyd_devices.utils.psi_device_base_utils import AndStatus
 
 from mybeamline_bec.devices.mydet.mydet import DetectorState, MyDetector
 
@@ -48,10 +49,22 @@ def test_on_stage_configures_ioc_and_returns_status(det):
     assert det.num_images.get() == msg.num_points * msg.scan_parameters["frames_per_trigger"]
     assert det.exp_time.get() == msg.scan_parameters["exp_time"]
     assert det.arm_cmd.get() == 1
-    assert isinstance(status, CompareStatus) and not status.done
+    assert isinstance(status, AndStatus) and not status.done  # armed & configured
     det.state._read_pv.mock_data = DetectorState.ARMED  # setter fires the subscription callbacks
     status.wait(timeout=1)
     assert status.done and status.success
+
+
+def test_on_stage_waits_for_configuration(det):
+    pending = Status()  # an IOC that has not confirmed NIMAGES yet
+    with mock.patch.object(det.num_images, "set", return_value=pending):
+        status = det.stage()
+    det.state._read_pv.mock_data = DetectorState.ARMED
+    with pytest.raises(WaitTimeoutError):
+        status.wait(timeout=0.2)
+    pending.set_finished()
+    status.wait(timeout=1)
+    assert status.success
 
 
 def test_on_stage_fails_when_ioc_reports_error(det):

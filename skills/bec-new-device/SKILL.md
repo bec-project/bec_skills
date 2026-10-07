@@ -73,8 +73,6 @@ class MyDetector(PSIDeviceBase, MyDetectorControl):
 - Constructors and `on_init()` must not communicate with devices: no PV reads or writes, no
   sockets, threads or files. The class must be constructible offline (`ophyd_test --config`
   instantiates it).
-- Leftover `deviceConfig` keys are applied by the server after connection as attribute/signal
-  writes, so expose tunables either as parameters or as signals.
 - Give the class a docstring whose first line describes the device: CI collects it into
   `ophyd_devices/devices/device_list.md` (generated - never edit that file by hand).
 - `USER_ACCESS`: expose methods, not properties, with verb names (`set_velocity()`,
@@ -137,8 +135,11 @@ class MyBeamlineDetector(MyDetector):
 
     def on_stage(self) -> DeviceStatus | StatusBase | None:
         """<copied base docstring>"""
-        self.set_trigger_mode(TriggerMode.EXTERNAL)   # beamline choice, via the control layer
-        return super().on_stage()
+        mode = self.set_trigger_mode(TriggerMode.EXTERNAL)   # beamline choice, via the control layer
+        status = super().on_stage()
+        status = mode if status is None else status & mode
+        self.cancel_on_stop(status)
+        return status
 
     def on_trigger(self) -> DeviceStatus | StatusBase | None:
         """<copied base docstring>"""
@@ -152,9 +153,20 @@ Order during a scan: `stage → pre_scan → (trigger per point | kickoff … co
 `stop` may interrupt anywhere; `destroy` on session teardown.
 
 - **Return promptly.** Staging, triggering, kickoff, completion and movement must not wait,
-  sleep or poll on the calling thread. Write PVs with `put()` (or keep the `set()` status) and
-  return a status for anything that is not finished yet. Use `task_handler.submit_task(fn)` for
-  long-running work; it returns a `TaskStatus` and is killed by `stop`/`destroy`.
+  sleep or poll on the calling thread. Return a status for anything that is not finished yet.
+- **Compose statuses.** Whether a write needs confirming is device specific, so by default write
+  with `set()` and fold the returned statuses into the hook's status with `&` (`AndStatus`),
+  together with the condition that says the device is ready (`CompareStatus`, `TransitionStatus`,
+  `SubscriptionStatus`). A bare `put()` is for commands whose effect another status already
+  confirms (e.g. `ARM` confirmed by a `CompareStatus` on the state PV). Keep a PSI status
+  leftmost in `a & b` (or call `AndStatus(a, b)`): an ophyd `set()` status on the left produces
+  ophyd's own `AndStatus` without the PSI timeout diagnostics. There is no OR status; express
+  alternative outcomes with `failure_value` / `failure_states`.
+- **EPICS devices need no task handler.** The device already monitors its PVs, so let those
+  subscriptions complete the statuses instead of a background task that blocks until something
+  happens. `task_handler.submit_task(fn)` is for work with nothing to subscribe to (socket or
+  vendor-SDK polling); its `TaskStatus` is killed by `destroy()`, and by `stop()` only if
+  `on_stop()` calls `self.task_handler.shutdown()`.
 - **Return values.** `on_stage()`, `on_complete()` and friends may return a status or `None`.
   Return `None` only when there is no outstanding work: `complete()` and `kickoff()` turn `None`
   into an already-finished status, so return a pending status while acquisition or file writing
@@ -264,7 +276,7 @@ existing local patterns before introducing a new abstraction.
 - [ ] "Beamline Specific Implementations" section copied: all ten hooks, base-class order, docstrings; helpers under "Helper Methods"
 - [ ] Subclass hooks preserve parent behaviour with `super()`
 - [ ] `name`, `scan_info`, `device_manager` explicit keyword parameters; no I/O in `__init__`/`on_init`
-- [ ] Scan hooks return promptly with statuses; all statuses `cancel_on_stop`; `on_stop` stops the hardware and is repeatable
+- [ ] Scan hooks return promptly with statuses; writes via `set()` composed with `&`; EPICS statuses driven by subscriptions, not the task handler; all statuses `cancel_on_stop`; `on_stop` stops the hardware and is repeatable
 - [ ] `scan_info.msg` used for exposure/points/type instead of duplicated scan kwargs
 - [ ] Signal kinds chosen deliberately; BEC signals declared as `Cpt(...)`; no manual Redis writes; `readoutPriority` consistent
 - [ ] Class docstring with a useful first line; `USER_ACCESS` lists verb-named methods
