@@ -1,6 +1,6 @@
 {
   "name": "bec-skills",
-  "description": "Agent skills for BEC (Beamline Experiment Control): reviews, widgets, plots, scans, device configs.",
+  "description": "Agent skills for BEC (Beamline Experiment Control): reviews, widget safety audits, widgets, plots, scans, device configs.",
   "owner": {
     "name": "Jan Wyzula",
     "email": "jan.wyzula@psi.ch"
@@ -9,7 +9,7 @@
     {
       "name": "bec-skills",
       "source": "./",
-      "description": "Agent skills for BEC: deep/focused review, new widget, new plot widget, new scan, device config.",
+      "description": "Agent skills for BEC: deep/focused review, widget safety audit, new widget, new plot widget, new scan, device config.",
       "version": "0.1.0"
     }
   ]

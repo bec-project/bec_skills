@@ -9,7 +9,8 @@ so everything must stay tool-agnostic and self-contained per skill folder.
 - **One folder per skill; no cross-folder references.** Skills are symlinked individually into
   agent skill directories, so `../other-skill/...` breaks. If two skills need the same reference
   (currently `references/bec-review-checklist.md` and `references/proof-branch.md` in both review skills,
-  and `references/repo-context.md` in `bec-new-widget` and `bec-new-plot-widget`), keep the copies
+  `references/repo-context.md` in `bec-new-widget` and `bec-new-plot-widget`, and
+  `references/lifecycle.md` in `bec-new-widget` and `bec-widget-safety-audit`), keep the copies
   byte-identical; `scripts/validate_skills.py` checks that.
 - **Core repo vs beamline plugin repo.** Most users are scientists in a beamline plugin repo. Every
   skill that creates code must say where the code goes in both cases and when to ask the user.

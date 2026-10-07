@@ -180,3 +180,5 @@ and closes cleanly - a single run with `PYTHONFAULTHANDLER=1` catches most segfa
 - [ ] repo decided (core vs plugin, asked if unclear); plugin code imports core, never copies it
 - [ ] tests use the shared `bec_widgets.tests` fixtures via the conftest star import, `create_widget`/`mocked_client`, include a lifecycle test, pass in random order
 - [ ] black/isort formatted; docstrings on the class and public methods
+- [ ] for a widget that owns timers, threads, proxies or cell widgets: the `bec-widget-safety-audit`
+      skill's probes pass (if that skill is installed)
