@@ -125,6 +125,10 @@ Rules that follow from how the server works:
 - **Do not rely on `status.wait(timeout=...)` raising.** It raises `TimeoutError` up to bec 4.1.4;
   bec#1118 makes it return `False` instead. Write `if not status.wait(timeout=t): raise
   ScanAbortion(...)` (`bec_server.scan_server.errors`), which is correct with both.
+- **Poll on `.done`, never `while not status.wait(timeout=t)`.** With bec#1118, `wait()` returns
+  `False` immediately on every call once an abort was requested, so that loop spins at full CPU
+  and never ends unless its body calls `self.actions`. `while not status.done:` with a short
+  `time.sleep` inside ends on abort and works with every bec version.
 - `scan_name` must be a valid identifier and unique across core + plugin scans (duplicates are
   skipped with an alarm). Keep the module docstring listing the hook order - the template does.
 

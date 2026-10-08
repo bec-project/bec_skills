@@ -112,6 +112,16 @@ if not status.wait(timeout=5):          # bec#1118: False on timeout
     raise ScanAbortion("kickoff of the DAQ timed out")   # bec_server.scan_server.errors
 ```
 
+With bec#1118, `False` also means "an abort was requested": `wait()` then returns `False` at once,
+without blocking, on every call. The check above still does the right thing (the scan aborts),
+but a polling loop must end on `.done`, which is `True` after an abort:
+
+```python
+while not complete_status.done:                   # not: while not complete_status.wait(timeout=0.5)
+    self.actions.read_monitored_devices()
+    time.sleep(0.1)                               # not wait(timeout=...): it raises before bec#1118
+```
+
 `.done` (property; reading it marks the status as checked; `True` once an abort was requested),
 `.result`. Container statuses aggregate sub-statuses (e.g. `stage_all_devices`). A status that is
 never waited on or checked is reported by `check_for_unchecked_statuses()`.
